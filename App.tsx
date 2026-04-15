@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
-type TabName = 'Tab1' | 'Tab2' | 'Tab3' | 'Tab4';
+type TabName = '健康管理' | '健康維持' | '就活管理' | '就活サポート';
 
 const TABS: { name: TabName; label: string }[] = [
   { name: 'Tab1', label: 'Tab 1' },
