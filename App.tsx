@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import {
-  SafeAreaView,
   StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 type TabName = 'Tab1' | 'Tab2' | 'Tab3' | 'Tab4';
 
@@ -21,28 +21,30 @@ function App() {
   const [activeTab, setActiveTab] = useState<TabName>('Tab1');
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
-      <View style={styles.content} />
-      <View style={styles.tabBar}>
-        {TABS.map(tab => (
-          <TouchableOpacity
-            key={tab.name}
-            style={styles.tabItem}
-            onPress={() => setActiveTab(tab.name)}
-          >
-            <Text
-              style={[
-                styles.tabLabel,
-                activeTab === tab.name && styles.tabLabelActive,
-              ]}
+    <SafeAreaProvider>
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" />
+        <View style={styles.content} />
+        <View style={styles.tabBar}>
+          {TABS.map(tab => (
+            <TouchableOpacity
+              key={tab.name}
+              style={styles.tabItem}
+              onPress={() => setActiveTab(tab.name)}
             >
-              {tab.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    </SafeAreaView>
+              <Text
+                style={[
+                  styles.tabLabel,
+                  activeTab === tab.name && styles.tabLabelActive,
+                ]}
+              >
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </SafeAreaView>
+    </SafeAreaProvider>
   );
 }
 
