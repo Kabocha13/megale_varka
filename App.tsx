@@ -15,10 +15,10 @@ import JobSupportScreen from './screens/JobSupportScreen';
 type TabName = 'health_care' | 'health_maintenance' | 'job_management' | 'job_support';
 
 const TABS: { name: TabName; label: string }[] = [
-  { name: 'health_care', label: 'Health Care' },
-  { name: 'health_maintenance', label: 'Health Maintenance' },
-  { name: 'job_management', label: 'Job Management' },
-  { name: 'job_support', label: 'Job Support' },
+  { name: 'health_care', label: '健康管理' },
+  { name: 'health_maintenance', label: '健康改善' },
+  { name: 'job_management', label: '就活管理' },
+  { name: 'job_support', label: '就活サポート' },
 ];
 
 function renderScreen(tab: TabName) {
