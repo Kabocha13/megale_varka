@@ -20,7 +20,7 @@ GithubでPull Requestを作成する
 
 git push origin feature/アカウント名
 
-下田がレビューマージするのを待つ(気づかないので連絡するといい)
+(下田に連絡するといい)
 
 
 This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
