@@ -8,17 +8,17 @@ import {
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
-type TabName = '健康管理' | '健康維持' | '就活管理' | '就活サポート';
+type TabName = 'health_care' | 'health_maintenance' | 'job_management' | 'job_support';
 
 const TABS: { name: TabName; label: string }[] = [
-  { name: 'Tab1', label: 'Tab 1' },
-  { name: 'Tab2', label: 'Tab 2' },
-  { name: 'Tab3', label: 'Tab 3' },
-  { name: 'Tab4', label: 'Tab 4' },
+  { name: 'health_care', label: 'Health Care' },
+  { name: 'health_maintenance', label: 'Health Maintenance' },
+  { name: 'job_management', label: 'Job Management' },
+  { name: 'job_support', label: 'Job Support' },
 ];
 
 function App() {
-  const [activeTab, setActiveTab] = useState<TabName>('Tab1');
+  const [activeTab, setActiveTab] = useState<TabName>('health_care');
 
   return (
     <SafeAreaProvider>
