@@ -13,9 +13,13 @@ npx react-native run-ios
 ## 保存方法
 
 git add .
+
 git commit -m "変更内容のメモ”
+
 GithubでPull Requestを作成する
+
 git push origin feature/アカウント名
+
 下田がレビューマージするのを待つ(気づかないので連絡するといい)
 
 
