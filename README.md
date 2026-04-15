@@ -1,18 +1,5 @@
 # 作業方法
 
-## 初回作業開始時
-
-cd Desktop
-git clone [https://アカウント名:トークン@github.com/Kabocha13/megale_varka.git](https://%E3%82%A2%E3%82%AB%E3%82%A6%E3%83%B3%E3%83%88%E5%90%8D:%E3%83%88%E3%83%BC%E3%82%AF%E3%83%B3@github.com/Kabocha13/megale_varka.git)
-cd megale_varka
-npm install
-cd ios && pod install && cd ..
-npx react-native run-ios
-
-コントロール＋Cおしてエンター
-git pull origin main
-git checkout -b feature/アカウント名
-
 ## 2回目以降作業開始時
 
 cd Desktop/megale_varka
