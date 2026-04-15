@@ -3,8 +3,11 @@
 ## 2回目以降作業開始時
 
 cd Desktop/megale_varka
+
 git pull origin main
+
 git checkout feature/アカウント名
+
 npx react-native run-ios
 
 ## 保存方法
