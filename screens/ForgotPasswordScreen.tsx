@@ -11,24 +11,27 @@ import {
 import { useAuth } from '../context/AuthContext';
 
 type Props = {
-  onNavigateToRegister: () => void;
-  onNavigateToForgotPassword: () => void;
+  onNavigateToLogin: () => void;
 };
 
-function LoginScreen({ onNavigateToRegister, onNavigateToForgotPassword }: Props) {
-  const { login } = useAuth();
+function ForgotPasswordScreen({ onNavigateToLogin }: Props) {
+  const { resetPassword } = useAuth();
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  async function handleLogin() {
-    if (!email || !password) {
-      Alert.alert('エラー', 'メールアドレスとパスワードを入力してください。');
+  async function handleReset() {
+    if (!email) {
+      Alert.alert('エラー', 'メールアドレスを入力してください。');
       return;
     }
     setSubmitting(true);
     try {
-      await login(email, password);
+      await resetPassword(email);
+      Alert.alert(
+        '送信完了',
+        'パスワードリセット用のメールを送信しました。メールをご確認ください。',
+        [{ text: 'OK', onPress: onNavigateToLogin }],
+      );
     } catch (error: unknown) {
       Alert.alert('エラー', (error as Error).message);
     } finally {
@@ -38,7 +41,10 @@ function LoginScreen({ onNavigateToRegister, onNavigateToForgotPassword }: Props
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>ログイン</Text>
+      <Text style={styles.title}>パスワードリセット</Text>
+      <Text style={styles.description}>
+        登録済みのメールアドレスを入力してください。パスワードリセット用のメールをお送りします。
+      </Text>
 
       <TextInput
         style={styles.input}
@@ -51,33 +57,20 @@ function LoginScreen({ onNavigateToRegister, onNavigateToForgotPassword }: Props
         editable={!submitting}
       />
 
-      <TextInput
-        style={styles.input}
-        placeholder="パスワード"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-        editable={!submitting}
-      />
-
       <TouchableOpacity
         style={[styles.button, submitting && styles.buttonDisabled]}
-        onPress={handleLogin}
+        onPress={handleReset}
         disabled={submitting}
       >
         {submitting ? (
           <ActivityIndicator color="#ffffff" />
         ) : (
-          <Text style={styles.buttonText}>ログイン</Text>
+          <Text style={styles.buttonText}>送信する</Text>
         )}
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={onNavigateToForgotPassword} disabled={submitting} style={styles.forgotPassword}>
-        <Text style={styles.link}>パスワードをお忘れの方はこちら</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity onPress={onNavigateToRegister} disabled={submitting}>
-        <Text style={styles.link}>アカウントをお持ちでない方はこちら</Text>
+      <TouchableOpacity onPress={onNavigateToLogin} disabled={submitting}>
+        <Text style={styles.link}>ログイン画面に戻る</Text>
       </TouchableOpacity>
     </View>
   );
@@ -94,7 +87,14 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    marginBottom: 40,
+    marginBottom: 16,
+  },
+  description: {
+    fontSize: 14,
+    color: '#555555',
+    textAlign: 'center',
+    marginBottom: 32,
+    lineHeight: 22,
   },
   input: {
     width: '100%',
@@ -123,9 +123,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  forgotPassword: {
-    marginBottom: 12,
-  },
   link: {
     color: '#555555',
     fontSize: 14,
@@ -133,4 +130,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default LoginScreen;
+export default ForgotPasswordScreen;

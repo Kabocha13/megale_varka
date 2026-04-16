@@ -13,11 +13,12 @@ import HealthCareScreen from './screens/HealthCareScreen';
 import HealthMaintenanceScreen from './screens/HealthMaintenanceScreen';
 import JobManagementScreen from './screens/JobManagementScreen';
 import JobSupportScreen from './screens/JobSupportScreen';
+import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
 
 type TabName = 'health_care' | 'health_maintenance' | 'job_management' | 'job_support';
-type AuthScreen = 'login' | 'register';
+type AuthScreen = 'login' | 'register' | 'forgot_password';
 
 const TABS: { name: TabName; label: string }[] = [
   { name: 'health_care', label: '健康管理' },
@@ -57,9 +58,14 @@ function AppContent() {
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="dark-content" />
         {authScreen === 'login' ? (
-          <LoginScreen onNavigateToRegister={() => setAuthScreen('register')} />
-        ) : (
+          <LoginScreen
+            onNavigateToRegister={() => setAuthScreen('register')}
+            onNavigateToForgotPassword={() => setAuthScreen('forgot_password')}
+          />
+        ) : authScreen === 'register' ? (
           <RegisterScreen onNavigateToLogin={() => setAuthScreen('login')} />
+        ) : (
+          <ForgotPasswordScreen onNavigateToLogin={() => setAuthScreen('login')} />
         )}
       </SafeAreaView>
     );
