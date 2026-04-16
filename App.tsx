@@ -7,12 +7,16 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import HealthCareScreen from './screens/HealthCareScreen';
 import HealthMaintenanceScreen from './screens/HealthMaintenanceScreen';
 import JobManagementScreen from './screens/JobManagementScreen';
 import JobSupportScreen from './screens/JobSupportScreen';
+import LoginScreen from './screens/LoginScreen';
+import RegisterScreen from './screens/RegisterScreen';
 
 type TabName = 'health_care' | 'health_maintenance' | 'job_management' | 'job_support';
+type AuthScreen = 'login' | 'register';
 
 const TABS: { name: TabName; label: string }[] = [
   { name: 'health_care', label: '健康管理' },
@@ -34,35 +38,58 @@ function renderScreen(tab: TabName) {
   }
 }
 
-function App() {
+function AppContent() {
+  const { isAuthenticated } = useAuth();
   const [activeTab, setActiveTab] = useState<TabName>('health_care');
+  const [authScreen, setAuthScreen] = useState<AuthScreen>('login');
 
-  return (
-    <SafeAreaProvider>
+  if (!isAuthenticated) {
+    return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="dark-content" />
-        <View style={styles.content}>
-          {renderScreen(activeTab)}
-        </View>
-        <View style={styles.tabBar}>
-          {TABS.map(tab => (
-            <TouchableOpacity
-              key={tab.name}
-              style={styles.tabItem}
-              onPress={() => setActiveTab(tab.name)}
-            >
-              <Text
-                style={[
-                  styles.tabLabel,
-                  activeTab === tab.name && styles.tabLabelActive,
-                ]}
-              >
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {authScreen === 'login' ? (
+          <LoginScreen onNavigateToRegister={() => setAuthScreen('register')} />
+        ) : (
+          <RegisterScreen onNavigateToLogin={() => setAuthScreen('login')} />
+        )}
       </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+      <View style={styles.content}>
+        {renderScreen(activeTab)}
+      </View>
+      <View style={styles.tabBar}>
+        {TABS.map(tab => (
+          <TouchableOpacity
+            key={tab.name}
+            style={styles.tabItem}
+            onPress={() => setActiveTab(tab.name)}
+          >
+            <Text
+              style={[
+                styles.tabLabel,
+                activeTab === tab.name && styles.tabLabelActive,
+              ]}
+            >
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </SafeAreaView>
+  );
+}
+
+function App() {
+  return (
+    <SafeAreaProvider>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
     </SafeAreaProvider>
   );
 }
