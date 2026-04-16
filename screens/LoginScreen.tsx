@@ -8,7 +8,10 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { DEMO_MODE } from '@env';
 import { useAuth } from '../context/AuthContext';
+
+const isDemoMode = DEMO_MODE === 'true';
 
 type Props = {
   onNavigateToRegister: () => void;
@@ -16,7 +19,7 @@ type Props = {
 };
 
 function LoginScreen({ onNavigateToRegister, onNavigateToForgotPassword }: Props) {
-  const { login } = useAuth();
+  const { login, loginAsDemo } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -39,6 +42,14 @@ function LoginScreen({ onNavigateToRegister, onNavigateToForgotPassword }: Props
   return (
     <View style={styles.container}>
       <Text style={styles.title}>ログイン</Text>
+
+      {isDemoMode && (
+        <View style={styles.demoHint}>
+          <Text style={styles.demoHintText}>
+            デモモード: 任意のメール・パスワード（6文字以上）でログインできます
+          </Text>
+        </View>
+      )}
 
       <TextInput
         style={styles.input}
@@ -71,6 +82,16 @@ function LoginScreen({ onNavigateToRegister, onNavigateToForgotPassword }: Props
           <Text style={styles.buttonText}>ログイン</Text>
         )}
       </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.demoButton}
+        onPress={loginAsDemo}
+        disabled={submitting}
+      >
+        <Text style={styles.demoButtonText}>デモとして試す</Text>
+      </TouchableOpacity>
+
+      <View style={styles.divider} />
 
       <TouchableOpacity onPress={onNavigateToForgotPassword} disabled={submitting} style={styles.forgotPassword}>
         <Text style={styles.link}>パスワードをお忘れの方はこちら</Text>
@@ -113,7 +134,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 8,
-    marginBottom: 24,
+    marginBottom: 12,
   },
   buttonDisabled: {
     backgroundColor: '#666666',
@@ -122,6 +143,39 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  demoButton: {
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#000000',
+    borderRadius: 8,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  demoButtonText: {
+    color: '#000000',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  divider: {
+    width: '100%',
+    height: 1,
+    backgroundColor: '#e0e0e0',
+    marginBottom: 20,
+  },
+  demoHint: {
+    width: '100%',
+    backgroundColor: '#fef3c7',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginBottom: 20,
+  },
+  demoHintText: {
+    color: '#92400e',
+    fontSize: 13,
+    lineHeight: 18,
   },
   forgotPassword: {
     marginBottom: 12,

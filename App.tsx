@@ -40,8 +40,30 @@ function renderScreen(tab: TabName) {
   }
 }
 
+function DemoBanner() {
+  return (
+    <View style={demoBannerStyles.banner}>
+      <Text style={demoBannerStyles.text}>デモモード</Text>
+    </View>
+  );
+}
+
+const demoBannerStyles = StyleSheet.create({
+  banner: {
+    backgroundColor: '#f59e0b',
+    paddingVertical: 4,
+    alignItems: 'center',
+  },
+  text: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: 'bold',
+    letterSpacing: 1,
+  },
+});
+
 function AppContent() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, isDemo, logout } = useAuth();
   const [activeTab, setActiveTab] = useState<TabName>('health_care');
   const [authScreen, setAuthScreen] = useState<AuthScreen>('login');
 
@@ -57,6 +79,7 @@ function AppContent() {
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="dark-content" />
+        {isDemo && <DemoBanner />}
         {authScreen === 'login' ? (
           <LoginScreen
             onNavigateToRegister={() => setAuthScreen('register')}
@@ -74,6 +97,7 @@ function AppContent() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
+      {isDemo && <DemoBanner />}
       <View style={styles.content}>
         {renderScreen(activeTab)}
       </View>
@@ -94,6 +118,9 @@ function AppContent() {
             </Text>
           </TouchableOpacity>
         ))}
+        <TouchableOpacity style={styles.tabItem} onPress={logout}>
+          <Text style={styles.tabLabel}>ログアウト</Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
