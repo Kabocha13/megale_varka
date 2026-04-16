@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
   StatusBar,
   StyleSheet,
   Text,
@@ -39,9 +40,17 @@ function renderScreen(tab: TabName) {
 }
 
 function AppContent() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<TabName>('health_care');
   const [authScreen, setAuthScreen] = useState<AuthScreen>('login');
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <ActivityIndicator size="large" style={styles.loading} />
+      </SafeAreaView>
+    );
+  }
 
   if (!isAuthenticated) {
     return (
@@ -100,6 +109,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
   },
   content: {
+    flex: 1,
+  },
+  loading: {
     flex: 1,
   },
   tabBar: {
