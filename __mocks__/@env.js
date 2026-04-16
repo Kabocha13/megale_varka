@@ -5,4 +5,5 @@ module.exports = {
   FIREBASE_STORAGE_BUCKET: 'test.appspot.com',
   FIREBASE_MESSAGING_SENDER_ID: '000000000',
   FIREBASE_APP_ID: '1:000000000:web:test',
+  DEMO_MODE: 'false',
 };
