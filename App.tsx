@@ -13,11 +13,12 @@ import HealthCareScreen from './screens/HealthCareScreen';
 import HealthMaintenanceScreen from './screens/HealthMaintenanceScreen';
 import JobManagementScreen from './screens/JobManagementScreen';
 import JobSupportScreen from './screens/JobSupportScreen';
+import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
 
 type TabName = 'health_care' | 'health_maintenance' | 'job_management' | 'job_support';
-type AuthScreen = 'login' | 'register';
+type AuthScreen = 'login' | 'register' | 'forgot_password';
 
 const TABS: { name: TabName; label: string }[] = [
   { name: 'health_care', label: '健康管理' },
@@ -39,8 +40,30 @@ function renderScreen(tab: TabName) {
   }
 }
 
+function DemoBanner() {
+  return (
+    <View style={demoBannerStyles.banner}>
+      <Text style={demoBannerStyles.text}>デモモード</Text>
+    </View>
+  );
+}
+
+const demoBannerStyles = StyleSheet.create({
+  banner: {
+    backgroundColor: '#f59e0b',
+    paddingVertical: 4,
+    alignItems: 'center',
+  },
+  text: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: 'bold',
+    letterSpacing: 1,
+  },
+});
+
 function AppContent() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, isDemo, logout } = useAuth();
   const [activeTab, setActiveTab] = useState<TabName>('health_care');
   const [authScreen, setAuthScreen] = useState<AuthScreen>('login');
 
@@ -56,10 +79,16 @@ function AppContent() {
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="dark-content" />
+        {isDemo && <DemoBanner />}
         {authScreen === 'login' ? (
-          <LoginScreen onNavigateToRegister={() => setAuthScreen('register')} />
-        ) : (
+          <LoginScreen
+            onNavigateToRegister={() => setAuthScreen('register')}
+            onNavigateToForgotPassword={() => setAuthScreen('forgot_password')}
+          />
+        ) : authScreen === 'register' ? (
           <RegisterScreen onNavigateToLogin={() => setAuthScreen('login')} />
+        ) : (
+          <ForgotPasswordScreen onNavigateToLogin={() => setAuthScreen('login')} />
         )}
       </SafeAreaView>
     );
@@ -68,6 +97,7 @@ function AppContent() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
+      {isDemo && <DemoBanner />}
       <View style={styles.content}>
         {renderScreen(activeTab)}
       </View>
@@ -88,6 +118,9 @@ function AppContent() {
             </Text>
           </TouchableOpacity>
         ))}
+        <TouchableOpacity style={styles.tabItem} onPress={logout}>
+          <Text style={styles.tabLabel}>ログアウト</Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
