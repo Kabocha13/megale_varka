@@ -1,52 +1,88 @@
-import React, { createContext, useContext, useState } from 'react';
+import {
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut,
+  User,
+} from 'firebase/auth';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { auth } from '../firebase/config';
 
 type AuthContextType = {
   isAuthenticated: boolean;
+  isLoading: boolean;
   email: string | null;
-  login: (email: string, password: string) => boolean;
-  register: (email: string, password: string) => boolean;
-  logout: () => void;
+  login: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-// In-memory user store
-const users: { email: string; password: string }[] = [];
+function getErrorMessage(code: string): string {
+  switch (code) {
+    case 'auth/user-not-found':
+    case 'auth/wrong-password':
+    case 'auth/invalid-credential':
+      return 'メールアドレスまたはパスワードが正しくありません。';
+    case 'auth/email-already-in-use':
+      return 'このメールアドレスはすでに登録されています。';
+    case 'auth/weak-password':
+      return 'パスワードは6文字以上で入力してください。';
+    case 'auth/invalid-email':
+      return 'メールアドレスの形式が正しくありません。';
+    case 'auth/too-many-requests':
+      return 'しばらく経ってから再度お試しください。';
+    default:
+      return 'エラーが発生しました。再度お試しください。';
+  }
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [email, setEmail] = useState<string | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  function login(inputEmail: string, inputPassword: string): boolean {
-    const user = users.find(
-      u => u.email === inputEmail && u.password === inputPassword,
-    );
-    if (user) {
-      setIsAuthenticated(true);
-      setEmail(inputEmail);
-      return true;
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, currentUser => {
+      setUser(currentUser);
+      setIsLoading(false);
+    });
+    return unsubscribe;
+  }, []);
+
+  async function login(inputEmail: string, inputPassword: string): Promise<void> {
+    try {
+      await signInWithEmailAndPassword(auth, inputEmail, inputPassword);
+    } catch (error: unknown) {
+      const code = (error as { code?: string }).code ?? '';
+      throw new Error(getErrorMessage(code));
     }
-    return false;
   }
 
-  function register(inputEmail: string, inputPassword: string): boolean {
-    const exists = users.some(u => u.email === inputEmail);
-    if (exists) {
-      return false;
+  async function register(inputEmail: string, inputPassword: string): Promise<void> {
+    try {
+      await createUserWithEmailAndPassword(auth, inputEmail, inputPassword);
+    } catch (error: unknown) {
+      const code = (error as { code?: string }).code ?? '';
+      throw new Error(getErrorMessage(code));
     }
-    users.push({ email: inputEmail, password: inputPassword });
-    setIsAuthenticated(true);
-    setEmail(inputEmail);
-    return true;
   }
 
-  function logout() {
-    setIsAuthenticated(false);
-    setEmail(null);
+  async function logout(): Promise<void> {
+    await signOut(auth);
   }
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, email, login, register, logout }}>
+    <AuthContext.Provider
+      value={{
+        isAuthenticated: user !== null,
+        isLoading,
+        email: user?.email ?? null,
+        login,
+        register,
+        logout,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

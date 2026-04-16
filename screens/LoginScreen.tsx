@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   StyleSheet,
   Text,
@@ -17,15 +18,20 @@ function LoginScreen({ onNavigateToRegister }: Props) {
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  function handleLogin() {
+  async function handleLogin() {
     if (!email || !password) {
       Alert.alert('エラー', 'メールアドレスとパスワードを入力してください。');
       return;
     }
-    const success = login(email, password);
-    if (!success) {
-      Alert.alert('エラー', 'メールアドレスまたはパスワードが正しくありません。');
+    setSubmitting(true);
+    try {
+      await login(email, password);
+    } catch (error: unknown) {
+      Alert.alert('エラー', (error as Error).message);
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -41,6 +47,7 @@ function LoginScreen({ onNavigateToRegister }: Props) {
         keyboardType="email-address"
         autoCapitalize="none"
         autoCorrect={false}
+        editable={!submitting}
       />
 
       <TextInput
@@ -49,13 +56,22 @@ function LoginScreen({ onNavigateToRegister }: Props) {
         value={password}
         onChangeText={setPassword}
         secureTextEntry
+        editable={!submitting}
       />
 
-      <TouchableOpacity style={styles.button} onPress={handleLogin}>
-        <Text style={styles.buttonText}>ログイン</Text>
+      <TouchableOpacity
+        style={[styles.button, submitting && styles.buttonDisabled]}
+        onPress={handleLogin}
+        disabled={submitting}
+      >
+        {submitting ? (
+          <ActivityIndicator color="#ffffff" />
+        ) : (
+          <Text style={styles.buttonText}>ログイン</Text>
+        )}
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={onNavigateToRegister}>
+      <TouchableOpacity onPress={onNavigateToRegister} disabled={submitting}>
         <Text style={styles.link}>アカウントをお持ちでない方はこちら</Text>
       </TouchableOpacity>
     </View>
@@ -93,6 +109,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 8,
     marginBottom: 24,
+  },
+  buttonDisabled: {
+    backgroundColor: '#666666',
   },
   buttonText: {
     color: '#ffffff',
