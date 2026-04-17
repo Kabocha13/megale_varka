@@ -18,7 +18,6 @@ type AuthContextType = {
   isDemo: boolean;
   email: string | null;
   login: (email: string, password: string) => Promise<void>;
-  loginAsDemo: () => void;
   register: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
@@ -116,11 +115,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  function loginAsDemo(): void {
-    setDemoEmail('demo@example.com');
-    setDemoLoggedIn(true);
-  }
-
   async function register(inputEmail: string, inputPassword: string): Promise<void> {
     if (isDemoMode) {
       await demoRegister(inputEmail, inputPassword);
@@ -169,7 +163,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isDemo: isDemoMode,
         email,
         login,
-        loginAsDemo,
         register,
         logout,
         resetPassword,
