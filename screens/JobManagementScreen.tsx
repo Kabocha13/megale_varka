@@ -1145,8 +1145,11 @@ function JobManagementScreen() {
   const [view, setView] = useState<ViewState>({ mode: 'list' });
 
   useEffect(() => {
-    AsyncStorage.multiGet([STORAGE_KEY, GLOBAL_FIELDS_KEY])
-      .then(([[, companiesJson], [, fieldsJson]]) => {
+    Promise.all([
+      AsyncStorage.getItem(STORAGE_KEY),
+      AsyncStorage.getItem(GLOBAL_FIELDS_KEY),
+    ])
+      .then(([companiesJson, fieldsJson]) => {
         if (companiesJson) setCompanies(JSON.parse(companiesJson));
         if (fieldsJson) setGlobalFields(JSON.parse(fieldsJson));
       })
