@@ -48,6 +48,25 @@ interface Company {
 
 const GOAL_OPTIONS: GoalType[] = ['インターン', '説明会', '本選考', 'OB訪問', 'その他'];
 const DESIRE_OPTIONS: DesireLevel[] = ['第一志望', '志望', '検討中', '滑り止め', '志望しない（拒否）'];
+const SELECTION_STATUS_OPTIONS: string[] = [
+  '未着手',
+  'ES作成中',
+  'ES提出済',
+  '書類選考中',
+  '適性検査待ち',
+  '一次面接待ち',
+  '一次面接済',
+  '二次面接待ち',
+  '二次面接済',
+  '三次面接待ち',
+  '三次面接済',
+  '最終面接待ち',
+  '最終面接済',
+  '内定',
+  '内定辞退',
+  '不合格',
+  '選考辞退',
+];
 const STORAGE_KEY = '@job_companies_v1';
 
 const C = {
@@ -117,18 +136,20 @@ function PickerModal({ visible, title, options, value, onSelect, onClose }: Pick
       <TouchableOpacity style={pmS.overlay} activeOpacity={1} onPress={onClose}>
         <View style={pmS.sheet}>
           <Text style={pmS.title}>{title}</Text>
-          {options.map(opt => (
-            <TouchableOpacity
-              key={opt}
-              style={[pmS.option, opt === value && pmS.optionSelected]}
-              onPress={() => { onSelect(opt); onClose(); }}
-            >
-              <Text style={[pmS.optionText, opt === value && pmS.optionTextSelected]}>
-                {opt}
-              </Text>
-              {opt === value && <Text style={pmS.check}>✓</Text>}
-            </TouchableOpacity>
-          ))}
+          <ScrollView style={pmS.optionList} bounces={false}>
+            {options.map(opt => (
+              <TouchableOpacity
+                key={opt}
+                style={[pmS.option, opt === value && pmS.optionSelected]}
+                onPress={() => { onSelect(opt); onClose(); }}
+              >
+                <Text style={[pmS.optionText, opt === value && pmS.optionTextSelected]}>
+                  {opt}
+                </Text>
+                {opt === value && <Text style={pmS.check}>✓</Text>}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
           <TouchableOpacity style={pmS.cancel} onPress={onClose}>
             <Text style={pmS.cancelText}>キャンセル</Text>
           </TouchableOpacity>
@@ -150,12 +171,14 @@ const pmS = StyleSheet.create({
     borderRadius: 14,
     width: '82%',
     padding: 16,
+    maxHeight: '80%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 8,
   },
+  optionList: { maxHeight: 340 },
   title: {
     fontSize: 16,
     fontWeight: 'bold',
@@ -566,7 +589,7 @@ interface CompanyDetailScreenProps {
 
 function CompanyDetailScreen({ company, isNew, onSave, onDelete, onBack }: CompanyDetailScreenProps) {
   const [form, setForm] = useState<Company>(company);
-  const [picker, setPicker] = useState<'goal' | 'desire' | null>(null);
+  const [picker, setPicker] = useState<'goal' | 'desire' | 'status' | null>(null);
   const originalRef = useRef(JSON.stringify(company));
 
   const set = <K extends keyof Company>(key: K, value: Company[K]) =>
@@ -680,16 +703,11 @@ function CompanyDetailScreen({ company, isNew, onSave, onDelete, onBack }: Compa
             onPress={() => setPicker('goal')}
           />
 
-          <Text style={dS.fieldLabel}>選考状況</Text>
-          <TextInput
-            style={[dS.input, dS.inputMulti]}
+          <SelectField
+            label="選考状況"
             value={form.selectionStatus}
-            onChangeText={v => set('selectionStatus', v)}
-            placeholder="例：一次面接通過・二次面接待ち"
-            placeholderTextColor={C.muted}
-            multiline
-            numberOfLines={3}
-            textAlignVertical="top"
+            placeholder="選択してください"
+            onPress={() => setPicker('status')}
           />
 
           <SelectField
@@ -771,6 +789,14 @@ function CompanyDetailScreen({ company, isNew, onSave, onDelete, onBack }: Compa
         options={GOAL_OPTIONS}
         value={form.currentGoal}
         onSelect={v => set('currentGoal', v as GoalType)}
+        onClose={() => setPicker(null)}
+      />
+      <PickerModal
+        visible={picker === 'status'}
+        title="選考状況を選択"
+        options={SELECTION_STATUS_OPTIONS}
+        value={form.selectionStatus}
+        onSelect={v => set('selectionStatus', v)}
         onClose={() => setPicker(null)}
       />
       <PickerModal
