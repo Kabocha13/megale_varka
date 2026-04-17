@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { ChatIcon, HomeIcon, SettingsIcon, WorkIcon } from './components/NavIcons';
+import { NavTabIcon } from './components/NavIcons';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
 import HealthCareScreen from './screens/HealthCareScreen';
@@ -21,20 +21,7 @@ import SettingsScreen from './screens/SettingsScreen';
 type TabName = 'home' | 'job_management' | 'consultation' | 'settings';
 type AuthScreen = 'login' | 'register' | 'forgot_password';
 
-const ICON_SIZE = 28;
 const COLOR_ACTIVE = '#304E78';
-const COLOR_INACTIVE = '#A8BDD4';
-
-function TabIcon({ name, active }: { name: TabName; active: boolean }) {
-  const color = active ? COLOR_ACTIVE : COLOR_INACTIVE;
-  switch (name) {
-    case 'home':          return <HomeIcon color={color} size={ICON_SIZE} />;
-    case 'job_management': return <WorkIcon color={color} size={ICON_SIZE} />;
-    case 'consultation':  return <ChatIcon color={color} size={ICON_SIZE} />;
-    case 'settings':      return <SettingsIcon color={color} size={ICON_SIZE} />;
-    default:              return null;
-  }
-}
 
 const TABS: TabName[] = ['home', 'job_management', 'consultation', 'settings'];
 
@@ -116,7 +103,7 @@ function AppContent() {
             style={styles.tabItem}
             onPress={() => setActiveTab(tab)}
           >
-            <TabIcon name={tab} active={activeTab === tab} />
+            <NavTabIcon name={tab} active={activeTab === tab} activeColor={COLOR_ACTIVE} />
           </TouchableOpacity>
         ))}
       </View>
