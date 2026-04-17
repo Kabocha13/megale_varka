@@ -494,6 +494,7 @@ function DatePickerField({
             minimumDate={new Date()}
             onChange={handleChange}
             locale="ja"
+            textColor="#000000"
           />
         </PickerFieldModal>
       )}
@@ -542,6 +543,7 @@ function TimePickerField({
             display="spinner"
             is24Hour
             onChange={handleChange}
+            textColor="#000000"
           />
         </PickerFieldModal>
       )}
