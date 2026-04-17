@@ -1,5 +1,5 @@
 import React from 'react';
-import MaterialIcons from '@react-native-vector-icons/material-icons';
+import { MaterialIcons } from '@react-native-vector-icons/material-icons';
 
 type Props = { color: string; size: number };
 
