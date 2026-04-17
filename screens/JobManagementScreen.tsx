@@ -587,6 +587,9 @@ function SearchFilterModal({ visible, filter, onApply, onClose }: SearchFilterMo
             style={sfS.toggleRow}
             onPress={() => set('hasTask', !draft.hasTask)}
             activeOpacity={0.7}
+            accessibilityRole="switch"
+            accessibilityLabel="未完了タスクがある企業のみ表示"
+            accessibilityState={{ checked: draft.hasTask }}
           >
             <Text style={sfS.toggleLabel}>未完了タスクがある企業のみ</Text>
             <View style={[sfS.track, draft.hasTask && sfS.trackOn]}>
