@@ -16,7 +16,7 @@ import {
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type GoalType = 'インターン' | '説明会' | '本選考' | 'OB訪問' | 'その他';
-type DesireLevel = '第一志望' | '志望' | '検討中' | '滑り止め' | '志望しない（拒否）';
+type DesireLevel = '第一志望' | '第一志望群' | '第二志望' | '第二志望群' | '第三志望' | '第三志望群' | '志望' | '検討中' | '志望しない';
 
 interface Task {
   id: string;
@@ -47,7 +47,7 @@ interface Company {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const GOAL_OPTIONS: GoalType[] = ['インターン', '説明会', '本選考', 'OB訪問', 'その他'];
-const DESIRE_OPTIONS: DesireLevel[] = ['第一志望', '志望', '検討中', '滑り止め', '志望しない（拒否）'];
+const DESIRE_OPTIONS: DesireLevel[] = ['第一志望', '第一志望群', '第二志望', '第二志望群', '第三志望', '第三志望群', '志望', '検討中', '志望しない'];
 const SELECTION_STATUS_OPTIONS: string[] = [
   '未着手',
   'ES作成中',
@@ -83,11 +83,15 @@ const C = {
 };
 
 const DESIRE_COLOR: Record<DesireLevel, string> = {
-  '第一志望': '#304E78',
-  '志望': '#5A7696',
-  '検討中': '#F59E0B',
-  '滑り止め': '#A8BDD4',
-  '志望しない（拒否）': '#E53935',
+  '第一志望':   '#304E78',
+  '第一志望群': '#3D6494',
+  '第二志望':   '#5A7696',
+  '第二志望群': '#7090A8',
+  '第三志望':   '#8AAABB',
+  '第三志望群': '#A0BDC8',
+  '志望':       '#43A047',
+  '検討中':     '#F59E0B',
+  '志望しない': '#E53935',
 };
 
 const GOAL_COLOR: Record<GoalType, string> = {
