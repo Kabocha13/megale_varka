@@ -22,6 +22,12 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
+import {
+  cancelTaskNotification,
+  getReminderDays,
+  requestNotificationPermission,
+  scheduleTaskNotification,
+} from '../services/notifications';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -37,6 +43,7 @@ interface Task {
   id: string;
   title: string;
   deadline: string;
+  time: string;
   submissionUrl: string;
   completed: boolean;
 }
@@ -406,7 +413,9 @@ function TaskItem({ task, onUpdate, onDelete }: TaskItemProps) {
           {task.title || '（タイトル未入力）'}
         </Text>
         {task.deadline ? (
-          <Text style={tiS.deadline}>{task.deadline}</Text>
+          <Text style={tiS.deadline}>
+            {task.deadline}{task.time ? ` ${task.time}` : ''}
+          </Text>
         ) : null}
         <Text style={tiS.chevron}>{expanded ? '▲' : '▼'}</Text>
       </TouchableOpacity>
@@ -421,13 +430,23 @@ function TaskItem({ task, onUpdate, onDelete }: TaskItemProps) {
             placeholder="タスクのタイトル"
             placeholderTextColor={C.muted}
           />
-          <Text style={tiS.label}>期限</Text>
+          <Text style={tiS.label}>期限（日付）</Text>
           <TextInput
             style={tiS.input}
             value={task.deadline}
             onChangeText={v => onUpdate({ ...task, deadline: v })}
             placeholder="例：2025-06-30"
             placeholderTextColor={C.muted}
+          />
+          <Text style={tiS.label}>期限（時刻）</Text>
+          <TextInput
+            style={tiS.input}
+            value={task.time ?? '23:59'}
+            onChangeText={v => onUpdate({ ...task, time: v })}
+            placeholder="23:59"
+            placeholderTextColor={C.muted}
+            keyboardType="numbers-and-punctuation"
+            maxLength={5}
           />
           <Text style={tiS.label}>提出先URL（任意）</Text>
           <TextInput
@@ -1000,7 +1019,7 @@ function CompanyDetailScreen({ company, isNew, globalFields, onUpdateGlobalField
   };
 
   const addTask = () =>
-    set('tasks', [...form.tasks, { id: uid(), title: '', deadline: '', submissionUrl: '', completed: false }]);
+    set('tasks', [...form.tasks, { id: uid(), title: '', deadline: '', time: '23:59', submissionUrl: '', completed: false }]);
 
   const updateTask = (id: string, t: Task) =>
     set('tasks', form.tasks.map(x => x.id === id ? t : x));
@@ -1297,8 +1316,9 @@ function JobManagementScreen() {
   const [globalFields, setGlobalFields] = useState<GlobalField[]>([]);
   const [view, setView] = useState<ViewState>({ mode: 'list' });
 
-  // 初期データ読み込み
+  // 初期データ読み込み・通知権限リクエスト
   useEffect(() => {
+    requestNotificationPermission().catch(() => {});
     if (!uid) return;
     if (isDemo) {
       Promise.all([
@@ -1319,6 +1339,26 @@ function JobManagementScreen() {
     }
   }, [uid, isDemo]);
 
+  // タスク通知をスケジュール
+  const syncNotifications = useCallback((company: Company) => {
+    getReminderDays().then(reminderDays => {
+      company.tasks.forEach(task => {
+        if (task.completed || !task.deadline) {
+          cancelTaskNotification(task.id).catch(() => {});
+        } else {
+          scheduleTaskNotification(
+            task.id,
+            task.title,
+            company.name,
+            task.deadline,
+            task.time ?? '23:59',
+            reminderDays,
+          ).catch(() => {});
+        }
+      });
+    }).catch(() => {});
+  }, []);
+
   // 企業を保存（追加・更新）
   const saveCompany = useCallback((company: Company) => {
     setCompanies(prev => {
@@ -1331,10 +1371,11 @@ function JobManagementScreen() {
     if (!isDemo && uid) {
       setDoc(doc(db, 'users', uid, 'job_companies', company.id), company).catch(() => {});
     }
-  }, [uid, isDemo]);
+    syncNotifications(company);
+  }, [uid, isDemo, syncNotifications]);
 
   // 企業を削除
-  const removeCompany = useCallback((companyId: string) => {
+  const removeCompany = useCallback((companyId: string, tasks: Task[]) => {
     setCompanies(prev => {
       const next = prev.filter(c => c.id !== companyId);
       if (isDemo) AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => {});
@@ -1343,6 +1384,7 @@ function JobManagementScreen() {
     if (!isDemo && uid) {
       deleteDoc(doc(db, 'users', uid, 'job_companies', companyId)).catch(() => {});
     }
+    tasks.forEach(t => cancelTaskNotification(t.id).catch(() => {}));
   }, [uid, isDemo]);
 
   // 全社共通項目を保存
@@ -1382,7 +1424,7 @@ function JobManagementScreen() {
         globalFields={globalFields}
         onUpdateGlobalFields={persistGlobalFields}
         onSave={saveCompany}
-        onDelete={() => removeCompany(view.companyId)}
+        onDelete={() => removeCompany(view.companyId, company.tasks)}
         onBack={() => setView({ mode: 'list' })}
       />
     );
