@@ -522,7 +522,7 @@ function SearchFilterModal({ visible, filter, onApply, onClose }: SearchFilterMo
 
   useEffect(() => {
     if (visible) setDraft(filter);
-  }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [visible, filter]);
 
   const set = <K extends keyof FilterState>(key: K, value: FilterState[K]) =>
     setDraft(f => ({ ...f, [key]: value }));
