@@ -468,7 +468,7 @@ function DatePickerField({
       </TouchableOpacity>
 
       {Platform.OS === 'android' && show && (
-        <DateTimePicker value={date} mode="date" onChange={handleChange} />
+        <DateTimePicker value={date} mode="date" minimumDate={new Date()} onChange={handleChange} />
       )}
       {Platform.OS === 'ios' && (
         <PickerFieldModal visible={show} onDone={() => setShow(false)}>
@@ -476,6 +476,7 @@ function DatePickerField({
             value={date}
             mode="date"
             display="spinner"
+            minimumDate={new Date()}
             onChange={handleChange}
             locale="ja"
           />
