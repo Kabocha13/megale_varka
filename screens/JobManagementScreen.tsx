@@ -18,6 +18,11 @@ import {
 type GoalType = 'インターン' | '説明会' | '本選考' | 'OB訪問' | 'その他';
 type DesireLevel = '第一志望' | '第一志望群' | '第二志望' | '第二志望群' | '第三志望' | '第三志望群' | '志望' | '検討中' | '志望しない';
 
+interface GlobalField {
+  id: string;
+  label: string;
+}
+
 interface Task {
   id: string;
   title: string;
@@ -42,6 +47,8 @@ interface Company {
   desireLevel: DesireLevel | '';
   tasks: Task[];
   customFields: CustomField[];
+  globalFieldValues: Record<string, string>;
+  memo: string;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -67,6 +74,7 @@ const SELECTION_STATUS_OPTIONS: string[] = [
   '選考辞退',
 ];
 const STORAGE_KEY = '@job_companies_v1';
+const GLOBAL_FIELDS_KEY = '@job_global_fields_v1';
 
 const C = {
   primary: '#304E78',
@@ -119,6 +127,8 @@ function makeEmptyCompany(): Company {
     desireLevel: '',
     tasks: [],
     customFields: [],
+    globalFieldValues: {},
+    memo: '',
   };
 }
 
@@ -210,6 +220,156 @@ const pmS = StyleSheet.create({
     borderTopColor: C.border,
   },
   cancelText: { color: C.danger, fontSize: 15 },
+});
+
+// ─── GlobalFieldsModal ────────────────────────────────────────────────────────
+
+interface GlobalFieldsModalProps {
+  visible: boolean;
+  fields: GlobalField[];
+  onUpdate: (fields: GlobalField[]) => void;
+  onClose: () => void;
+}
+
+function GlobalFieldsModal({ visible, fields, onUpdate, onClose }: GlobalFieldsModalProps) {
+  const [draft, setDraft] = useState<GlobalField[]>(fields);
+  const [newLabel, setNewLabel] = useState('');
+
+  useEffect(() => {
+    if (visible) { setDraft(fields); setNewLabel(''); }
+  }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const addField = () => {
+    const label = newLabel.trim();
+    if (!label) return;
+    if (draft.some(f => f.label === label)) {
+      Alert.alert('重複', `「${label}」はすでに追加されています。`);
+      return;
+    }
+    setDraft(d => [...d, { id: uid(), label }]);
+    setNewLabel('');
+  };
+
+  const removeField = (id: string) => {
+    Alert.alert('共通項目を削除', '全企業からこの入力欄が非表示になります。\n（入力済みの値は内部に保持されます）', [
+      { text: 'キャンセル', style: 'cancel' },
+      { text: '削除', style: 'destructive', onPress: () => setDraft(d => d.filter(f => f.id !== id)) },
+    ]);
+  };
+
+  const handleDone = () => { onUpdate(draft); onClose(); };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleDone}>
+      <View style={gfS.overlay}>
+        <View style={gfS.sheet}>
+          <View style={gfS.header}>
+            <Text style={gfS.title}>全社共通項目の管理</Text>
+            <TouchableOpacity onPress={handleDone} style={gfS.doneBtn}>
+              <Text style={gfS.doneBtnText}>完了</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={gfS.desc}>
+            ここで追加した項目は全企業の入力欄に表示されます。
+          </Text>
+
+          <ScrollView style={gfS.list} bounces={false}>
+            {draft.length === 0 && (
+              <Text style={gfS.emptyText}>共通項目はまだありません</Text>
+            )}
+            {draft.map(field => (
+              <View key={field.id} style={gfS.fieldRow}>
+                <Text style={gfS.fieldLabel}>{field.label}</Text>
+                <TouchableOpacity
+                  onPress={() => removeField(field.id)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={gfS.removeText}>削除</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </ScrollView>
+
+          <View style={gfS.addRow}>
+            <TextInput
+              style={gfS.addInput}
+              value={newLabel}
+              onChangeText={setNewLabel}
+              placeholder="新しい項目名（例：初任給）"
+              placeholderTextColor={C.muted}
+              onSubmitEditing={addField}
+              returnKeyType="done"
+            />
+            <TouchableOpacity style={gfS.addBtn} onPress={addField}>
+              <Text style={gfS.addBtnText}>追加</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const gfS = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: C.card,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    maxHeight: '75%',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  title: { fontSize: 16, fontWeight: 'bold', color: C.text },
+  doneBtn: {
+    backgroundColor: C.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  doneBtnText: { color: C.card, fontSize: 14, fontWeight: 'bold' },
+  desc: { fontSize: 13, color: C.sub, marginBottom: 12 },
+  list: { maxHeight: 240, marginBottom: 12 },
+  emptyText: { color: C.muted, fontSize: 13, textAlign: 'center', paddingVertical: 16 },
+  fieldRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+  },
+  fieldLabel: { fontSize: 15, color: C.text },
+  removeText: { color: C.danger, fontSize: 14 },
+  addRow: { flexDirection: 'row', alignItems: 'center' },
+  addInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: C.text,
+    backgroundColor: '#FAFAFA',
+    marginRight: 8,
+  },
+  addBtn: {
+    backgroundColor: C.primary,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  addBtnText: { color: C.card, fontSize: 14, fontWeight: 'bold' },
 });
 
 // ─── TaskItem ─────────────────────────────────────────────────────────────────
@@ -585,14 +745,17 @@ function SelectField({ label, value, placeholder, onPress }: SelectFieldProps) {
 interface CompanyDetailScreenProps {
   company: Company;
   isNew: boolean;
+  globalFields: GlobalField[];
+  onUpdateGlobalFields: (fields: GlobalField[]) => void;
   onSave: (c: Company) => void;
   onDelete: () => void;
   onBack: () => void;
 }
 
-function CompanyDetailScreen({ company, isNew, onSave, onDelete, onBack }: CompanyDetailScreenProps) {
+function CompanyDetailScreen({ company, isNew, globalFields, onUpdateGlobalFields, onSave, onDelete, onBack }: CompanyDetailScreenProps) {
   const [form, setForm] = useState<Company>(company);
   const [picker, setPicker] = useState<'goal' | 'desire' | 'status' | null>(null);
+  const [showGlobalFieldsModal, setShowGlobalFieldsModal] = useState(false);
   const originalRef = useRef(JSON.stringify(company));
 
   const set = <K extends keyof Company>(key: K, value: Company[K]) =>
@@ -740,11 +903,60 @@ function CompanyDetailScreen({ company, isNew, onSave, onDelete, onBack }: Compa
           </TouchableOpacity>
         </View>
 
+        {/* ── メモ ── */}
+        <Text style={dS.sectionTitle}>メモ</Text>
+        <View style={dS.section}>
+          <TextInput
+            style={[dS.input, dS.inputMemo]}
+            value={form.memo ?? ''}
+            onChangeText={v => set('memo', v)}
+            placeholder="自由にメモを残せます"
+            placeholderTextColor={C.muted}
+            multiline
+            textAlignVertical="top"
+          />
+        </View>
+
         {/* ── カスタム項目 ── */}
-        <Text style={dS.sectionTitle}>カスタム項目</Text>
+        <View style={dS.sectionTitleRow}>
+          <Text style={dS.sectionTitle}>カスタム項目</Text>
+        </View>
+
+        {/* 全社共通項目 */}
+        <View style={dS.subHeader}>
+          <Text style={dS.subHeaderTitle}>全社共通項目</Text>
+          <TouchableOpacity onPress={() => setShowGlobalFieldsModal(true)}>
+            <Text style={dS.manageLink}>項目を管理</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={dS.section}>
+          {globalFields.length === 0 ? (
+            <TouchableOpacity onPress={() => setShowGlobalFieldsModal(true)} style={dS.addBtn}>
+              <Text style={dS.addBtnText}>＋ 全社共通項目を設定する</Text>
+            </TouchableOpacity>
+          ) : (
+            globalFields.map(gf => (
+              <View key={gf.id}>
+                <Text style={dS.fieldLabel}>{gf.label}</Text>
+                <TextInput
+                  style={dS.input}
+                  value={(form.globalFieldValues ?? {})[gf.id] ?? ''}
+                  onChangeText={v => set('globalFieldValues', { ...(form.globalFieldValues ?? {}), [gf.id]: v })}
+                  placeholder="未入力"
+                  placeholderTextColor={C.muted}
+                />
+              </View>
+            ))
+          )}
+        </View>
+
+        {/* この企業だけの項目 */}
+        <View style={dS.subHeader}>
+          <Text style={dS.subHeaderTitle}>この企業だけの項目</Text>
+        </View>
         <View style={dS.section}>
           {form.customFields.length === 0 && (
-            <Text style={dS.emptySectionText}>カスタム項目はありません</Text>
+            <Text style={dS.emptySectionText}>項目はありません</Text>
           )}
           {form.customFields.map(field => (
             <View key={field.id} style={dS.customRow}>
@@ -786,6 +998,12 @@ function CompanyDetailScreen({ company, isNew, onSave, onDelete, onBack }: Compa
         <View style={dS.bottomPad} />
       </ScrollView>
 
+      <GlobalFieldsModal
+        visible={showGlobalFieldsModal}
+        fields={globalFields}
+        onUpdate={onUpdateGlobalFields}
+        onClose={() => setShowGlobalFieldsModal(false)}
+      />
       <PickerModal
         visible={picker === 'goal'}
         title="現目標を選択"
@@ -861,6 +1079,17 @@ const dS = StyleSheet.create({
     backgroundColor: '#FAFAFA',
   },
   inputMulti: { minHeight: 72, textAlignVertical: 'top' },
+  inputMemo: { minHeight: 100, textAlignVertical: 'top' },
+  sectionTitleRow: { flexDirection: 'row', alignItems: 'center', marginTop: 16, marginBottom: 4 },
+  subHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 10,
+    marginBottom: 6,
+  },
+  subHeaderTitle: { fontSize: 13, fontWeight: 'bold', color: C.sub },
+  manageLink: { fontSize: 13, color: C.primary },
   selectBtn: {
     borderWidth: 1,
     borderColor: C.border,
@@ -912,11 +1141,15 @@ type ViewState =
 
 function JobManagementScreen() {
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [globalFields, setGlobalFields] = useState<GlobalField[]>([]);
   const [view, setView] = useState<ViewState>({ mode: 'list' });
 
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY)
-      .then(json => { if (json) setCompanies(JSON.parse(json)); })
+    AsyncStorage.multiGet([STORAGE_KEY, GLOBAL_FIELDS_KEY])
+      .then(([[, companiesJson], [, fieldsJson]]) => {
+        if (companiesJson) setCompanies(JSON.parse(companiesJson));
+        if (fieldsJson) setGlobalFields(JSON.parse(fieldsJson));
+      })
       .catch(() => {});
   }, []);
 
@@ -925,11 +1158,18 @@ function JobManagementScreen() {
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(list)).catch(() => {});
   }, []);
 
+  const persistGlobalFields = useCallback((fields: GlobalField[]) => {
+    setGlobalFields(fields);
+    AsyncStorage.setItem(GLOBAL_FIELDS_KEY, JSON.stringify(fields)).catch(() => {});
+  }, []);
+
   if (view.mode === 'new') {
     return (
       <CompanyDetailScreen
         company={view.draft}
         isNew
+        globalFields={globalFields}
+        onUpdateGlobalFields={persistGlobalFields}
         onSave={c => persist([...companies, c])}
         onDelete={() => {/* nothing to delete – draft was never persisted */}}
         onBack={() => setView({ mode: 'list' })}
@@ -947,6 +1187,8 @@ function JobManagementScreen() {
       <CompanyDetailScreen
         company={company}
         isNew={false}
+        globalFields={globalFields}
+        onUpdateGlobalFields={persistGlobalFields}
         onSave={updated => persist(companies.map(c => c.id === updated.id ? updated : c))}
         onDelete={() => persist(companies.filter(c => c.id !== view.companyId))}
         onBack={() => setView({ mode: 'list' })}
