@@ -527,8 +527,14 @@ function SearchFilterModal({ visible, filter, onApply, onClose }: SearchFilterMo
   const set = <K extends keyof FilterState>(key: K, value: FilterState[K]) =>
     setDraft(f => ({ ...f, [key]: value }));
 
-  const toggle = (key: 'goal' | 'desireLevel', value: string) =>
-    setDraft(f => ({ ...f, [key]: f[key] === value ? '' : value }));
+  const toggle = <K extends 'goal' | 'desireLevel'>(
+    key: K,
+    value: Exclude<FilterState[K], ''>,
+  ) =>
+    setDraft((f): FilterState => {
+      const nextValue: FilterState[K] = f[key] === value ? '' : value;
+      return { ...f, [key]: nextValue } as FilterState;
+    });
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
