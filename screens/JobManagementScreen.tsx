@@ -5,6 +5,7 @@ import {
   FlatList,
   Linking,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import {
   collection,
   deleteDoc,
@@ -381,6 +383,167 @@ const gfS = StyleSheet.create({
   addBtnText: { color: C.card, fontSize: 14, fontWeight: 'bold' },
 });
 
+// ─── Date/Time helpers ───────────────────────────────────────────────────────
+
+function parseDate(s: string): Date {
+  const [y, m, d] = s.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+function formatDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+function displayDate(s: string): string {
+  const [y, m, d] = s.split('-').map(Number);
+  return `${y}年${m}月${d}日`;
+}
+function parseTime(s: string): Date {
+  const [h, m] = (s || '23:59').split(':').map(Number);
+  const d = new Date();
+  d.setHours(h, m, 0, 0);
+  return d;
+}
+function formatTime(d: Date): string {
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+// ─── PickerFieldModal（iOS用ラッパー） ────────────────────────────────────────
+
+function PickerFieldModal({
+  visible,
+  onDone,
+  children,
+}: {
+  visible: boolean;
+  onDone: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onDone}>
+      <View style={pfS.overlay}>
+        <View style={pfS.sheet}>
+          <TouchableOpacity style={pfS.doneRow} onPress={onDone}>
+            <Text style={pfS.doneText}>完了</Text>
+          </TouchableOpacity>
+          {children}
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const pfS = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'flex-end' },
+  sheet: { backgroundColor: '#FFF', borderTopLeftRadius: 16, borderTopRightRadius: 16 },
+  doneRow: { alignItems: 'flex-end', paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#D9D0C8' },
+  doneText: { color: '#304E78', fontSize: 16, fontWeight: 'bold' },
+});
+
+// ─── DatePickerField ──────────────────────────────────────────────────────────
+
+function DatePickerField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [show, setShow] = useState(false);
+  const date = value ? parseDate(value) : new Date();
+
+  const handleChange = (_: DateTimePickerEvent, selected?: Date) => {
+    if (Platform.OS === 'android') setShow(false);
+    if (selected) onChange(formatDate(selected));
+  };
+
+  return (
+    <>
+      <TouchableOpacity style={pfS2.btn} onPress={() => setShow(true)}>
+        <Text style={value ? pfS2.btnText : pfS2.btnPlaceholder}>
+          {value ? displayDate(value) : '日付を選択'}
+        </Text>
+        <Text style={pfS2.icon}>📅</Text>
+      </TouchableOpacity>
+
+      {Platform.OS === 'android' && show && (
+        <DateTimePicker value={date} mode="date" onChange={handleChange} />
+      )}
+      {Platform.OS === 'ios' && (
+        <PickerFieldModal visible={show} onDone={() => setShow(false)}>
+          <DateTimePicker
+            value={date}
+            mode="date"
+            display="spinner"
+            onChange={handleChange}
+            locale="ja"
+          />
+        </PickerFieldModal>
+      )}
+    </>
+  );
+}
+
+// ─── TimePickerField ──────────────────────────────────────────────────────────
+
+function TimePickerField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [show, setShow] = useState(false);
+  const date = parseTime(value || '23:59');
+
+  const handleChange = (_: DateTimePickerEvent, selected?: Date) => {
+    if (Platform.OS === 'android') setShow(false);
+    if (selected) onChange(formatTime(selected));
+  };
+
+  return (
+    <>
+      <TouchableOpacity style={pfS2.btn} onPress={() => setShow(true)}>
+        <Text style={pfS2.btnText}>{value || '23:59'}</Text>
+        <Text style={pfS2.icon}>🕐</Text>
+      </TouchableOpacity>
+
+      {Platform.OS === 'android' && show && (
+        <DateTimePicker value={date} mode="time" is24Hour onChange={handleChange} />
+      )}
+      {Platform.OS === 'ios' && (
+        <PickerFieldModal visible={show} onDone={() => setShow(false)}>
+          <DateTimePicker
+            value={date}
+            mode="time"
+            display="spinner"
+            is24Hour
+            onChange={handleChange}
+          />
+        </PickerFieldModal>
+      )}
+    </>
+  );
+}
+
+const pfS2 = StyleSheet.create({
+  btn: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#D9D0C8',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#FAFAFA',
+  },
+  btnText: { fontSize: 14, color: '#333333' },
+  btnPlaceholder: { fontSize: 14, color: '#A8BDD4' },
+  icon: { fontSize: 16 },
+});
+
 // ─── TaskItem ─────────────────────────────────────────────────────────────────
 
 interface TaskItemProps {
@@ -414,7 +577,7 @@ function TaskItem({ task, onUpdate, onDelete }: TaskItemProps) {
         </Text>
         {task.deadline ? (
           <Text style={tiS.deadline}>
-            {task.deadline}{task.time ? ` ${task.time}` : ''}
+            {displayDate(task.deadline)}{task.time ? ` ${task.time}` : ''}
           </Text>
         ) : null}
         <Text style={tiS.chevron}>{expanded ? '▲' : '▼'}</Text>
@@ -431,22 +594,14 @@ function TaskItem({ task, onUpdate, onDelete }: TaskItemProps) {
             placeholderTextColor={C.muted}
           />
           <Text style={tiS.label}>期限（日付）</Text>
-          <TextInput
-            style={tiS.input}
+          <DatePickerField
             value={task.deadline}
-            onChangeText={v => onUpdate({ ...task, deadline: v })}
-            placeholder="例：2025-06-30"
-            placeholderTextColor={C.muted}
+            onChange={v => onUpdate({ ...task, deadline: v })}
           />
           <Text style={tiS.label}>期限（時刻）</Text>
-          <TextInput
-            style={tiS.input}
+          <TimePickerField
             value={task.time ?? '23:59'}
-            onChangeText={v => onUpdate({ ...task, time: v })}
-            placeholder="23:59"
-            placeholderTextColor={C.muted}
-            keyboardType="numbers-and-punctuation"
-            maxLength={5}
+            onChange={v => onUpdate({ ...task, time: v })}
           />
           <Text style={tiS.label}>提出先URL（任意）</Text>
           <TextInput
