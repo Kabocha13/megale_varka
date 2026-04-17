@@ -82,11 +82,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 32,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#F2EBE4',
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
+    color: '#304E78',
     marginBottom: 16,
   },
   description: {
@@ -108,7 +109,7 @@ const styles = StyleSheet.create({
   },
   button: {
     width: '100%',
-    backgroundColor: '#000000',
+    backgroundColor: '#304E78',
     borderRadius: 8,
     paddingVertical: 14,
     alignItems: 'center',
@@ -116,10 +117,10 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   buttonDisabled: {
-    backgroundColor: '#666666',
+    backgroundColor: '#4F6B8A',
   },
   buttonText: {
-    color: '#ffffff',
+    color: '#F2EBE4',
     fontSize: 16,
     fontWeight: 'bold',
   },
