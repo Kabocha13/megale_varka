@@ -24,19 +24,43 @@ const REMINDER_OPTIONS = [
   { label: '2週間前', days: 14 },
 ];
 
+function daysLabel(selected: number[]): string {
+  if (selected.length === 0) return '未設定';
+  return selected
+    .slice()
+    .sort((a, b) => a - b)
+    .map(d => REMINDER_OPTIONS.find(o => o.days === d)?.label ?? `${d}日前`)
+    .join('・');
+}
+
 export default function SettingsScreen() {
   const { logout } = useAuth();
-  const [reminderDays, setReminderDays] = useState(DEFAULT_REMINDER_DAYS);
+  const [reminderDays, setReminderDays] = useState<number[]>(DEFAULT_REMINDER_DAYS);
   const [showPicker, setShowPicker] = useState(false);
+  const [draft, setDraft] = useState<number[]>(DEFAULT_REMINDER_DAYS);
 
   useEffect(() => {
-    getReminderDays().then(setReminderDays).catch(() => {});
+    getReminderDays().then(days => {
+      setReminderDays(days);
+      setDraft(days);
+    }).catch(() => {});
   }, []);
 
-  const handleSelectDays = async (days: number) => {
-    setReminderDays(days);
+  const handleOpenPicker = () => {
+    setDraft(reminderDays);
+    setShowPicker(true);
+  };
+
+  const handleToggle = (days: number) => {
+    setDraft(prev =>
+      prev.includes(days) ? prev.filter(d => d !== days) : [...prev, days],
+    );
+  };
+
+  const handleConfirm = async () => {
+    setReminderDays(draft);
     setShowPicker(false);
-    await saveReminderDays(days).catch(() => {});
+    await saveReminderDays(draft).catch(() => {});
   };
 
   const handleLogoutPress = async () => {
@@ -46,9 +70,6 @@ export default function SettingsScreen() {
       Alert.alert('エラー', 'ログアウトに失敗しました。もう一度お試しください。');
     }
   };
-
-  const currentLabel =
-    REMINDER_OPTIONS.find(o => o.days === reminderDays)?.label ?? `${reminderDays}日前`;
 
   return (
     <ScrollView style={s.container} contentContainerStyle={s.content}>
@@ -60,10 +81,10 @@ export default function SettingsScreen() {
         <View style={s.row}>
           <View style={s.rowLeft}>
             <Text style={s.rowLabel}>タスクリマインド</Text>
-            <Text style={s.rowSub}>期限の何日前に通知するか</Text>
+            <Text style={s.rowSub}>期限の何日前に通知するか（複数選択可）</Text>
           </View>
-          <TouchableOpacity style={s.valueBtn} onPress={() => setShowPicker(true)}>
-            <Text style={s.valueBtnText}>{currentLabel}</Text>
+          <TouchableOpacity style={s.valueBtn} onPress={handleOpenPicker}>
+            <Text style={s.valueBtnText} numberOfLines={1}>{daysLabel(reminderDays)}</Text>
             <Text style={s.arrow}>▼</Text>
           </TouchableOpacity>
         </View>
@@ -77,28 +98,41 @@ export default function SettingsScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* リマインド日数ピッカー */}
+      {/* リマインド日数ピッカー（複数選択） */}
       <Modal visible={showPicker} transparent animationType="fade" onRequestClose={() => setShowPicker(false)}>
-        <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={() => setShowPicker(false)}>
+        <View style={s.overlay}>
           <View style={s.pickerSheet}>
             <Text style={s.pickerTitle}>リマインドのタイミング</Text>
-            {REMINDER_OPTIONS.map(opt => (
-              <TouchableOpacity
-                key={opt.days}
-                style={[s.pickerOption, reminderDays === opt.days && s.pickerOptionSelected]}
-                onPress={() => handleSelectDays(opt.days)}
-              >
-                <Text style={[s.pickerOptionText, reminderDays === opt.days && s.pickerOptionTextSelected]}>
-                  {opt.label}
-                </Text>
-                {reminderDays === opt.days && <Text style={s.check}>✓</Text>}
+            <Text style={s.pickerSub}>複数選択できます</Text>
+            {REMINDER_OPTIONS.map(opt => {
+              const selected = draft.includes(opt.days);
+              return (
+                <TouchableOpacity
+                  key={opt.days}
+                  style={[s.pickerOption, selected && s.pickerOptionSelected]}
+                  onPress={() => handleToggle(opt.days)}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: selected }}
+                >
+                  <Text style={[s.pickerOptionText, selected && s.pickerOptionTextSelected]}>
+                    {opt.label}
+                  </Text>
+                  <View style={[s.checkbox, selected && s.checkboxSelected]}>
+                    {selected && <Text style={s.checkmark}>✓</Text>}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+            <View style={s.pickerActions}>
+              <TouchableOpacity style={s.pickerCancelBtn} onPress={() => setShowPicker(false)}>
+                <Text style={s.pickerCancelText}>キャンセル</Text>
               </TouchableOpacity>
-            ))}
-            <TouchableOpacity style={s.pickerCancel} onPress={() => setShowPicker(false)}>
-              <Text style={s.pickerCancelText}>キャンセル</Text>
-            </TouchableOpacity>
+              <TouchableOpacity style={s.pickerConfirmBtn} onPress={handleConfirm}>
+                <Text style={s.pickerConfirmText}>完了</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </TouchableOpacity>
+        </View>
       </Modal>
     </ScrollView>
   );
@@ -134,7 +168,7 @@ const s = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 16,
   },
-  rowLeft: { flex: 1 },
+  rowLeft: { flex: 1, marginRight: 8 },
   rowLabel: { fontSize: 15, color: C.text, fontWeight: '500' },
   rowSub: { fontSize: 12, color: C.muted, marginTop: 2 },
   valueBtn: {
@@ -144,8 +178,9 @@ const s = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
+    maxWidth: '55%',
   },
-  valueBtnText: { fontSize: 14, color: C.primary, fontWeight: 'bold', marginRight: 4 },
+  valueBtnText: { fontSize: 13, color: C.primary, fontWeight: 'bold', marginRight: 4, flexShrink: 1 },
   arrow: { fontSize: 10, color: C.muted },
   logoutRow: { paddingVertical: 14, paddingHorizontal: 16, alignItems: 'center' },
   logoutText: { color: C.danger, fontSize: 16, fontWeight: 'bold' },
@@ -158,10 +193,11 @@ const s = StyleSheet.create({
   pickerSheet: {
     backgroundColor: C.card,
     borderRadius: 14,
-    width: '80%',
+    width: '82%',
     padding: 16,
   },
-  pickerTitle: { fontSize: 16, fontWeight: 'bold', color: C.text, textAlign: 'center', marginBottom: 12 },
+  pickerTitle: { fontSize: 16, fontWeight: 'bold', color: C.text, textAlign: 'center', marginBottom: 4 },
+  pickerSub: { fontSize: 12, color: C.muted, textAlign: 'center', marginBottom: 12 },
   pickerOption: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -174,13 +210,40 @@ const s = StyleSheet.create({
   pickerOptionSelected: { backgroundColor: '#EBF0F8' },
   pickerOptionText: { fontSize: 15, color: C.text },
   pickerOptionTextSelected: { color: C.primary, fontWeight: 'bold' },
-  check: { color: C.primary, fontSize: 16, fontWeight: 'bold' },
-  pickerCancel: {
-    marginTop: 8,
-    paddingVertical: 12,
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: C.border,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxSelected: { borderColor: C.primary, backgroundColor: C.primary },
+  checkmark: { color: '#FFF', fontSize: 13, fontWeight: 'bold' },
+  pickerActions: {
+    flexDirection: 'row',
+    marginTop: 12,
     borderTopWidth: 1,
     borderTopColor: C.border,
+    paddingTop: 12,
+    gap: 8,
   },
-  pickerCancelText: { color: C.danger, fontSize: 15 },
+  pickerCancelBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  pickerCancelText: { color: C.sub, fontSize: 15 },
+  pickerConfirmBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 8,
+    backgroundColor: C.primary,
+  },
+  pickerConfirmText: { color: '#FFF', fontSize: 15, fontWeight: 'bold' },
 });
