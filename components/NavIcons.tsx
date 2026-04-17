@@ -8,7 +8,7 @@ export function HomeIcon({ color, size }: Props) {
 }
 
 export function WorkIcon({ color, size }: Props) {
-  return <MaterialIcons name="business-center" color={color} size={size} />;
+  return <MaterialIcons name="work" color={color} size={size} />;
 }
 
 export function ChatIcon({ color, size }: Props) {
