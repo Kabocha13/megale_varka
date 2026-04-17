@@ -12,6 +12,16 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  setDoc,
+} from 'firebase/firestore';
+import { db } from '../firebase/config';
+import { useAuth } from '../context/AuthContext';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -1080,31 +1090,68 @@ type ViewState =
   | { mode: 'new'; draft: Company };
 
 function JobManagementScreen() {
+  const { uid, isDemo } = useAuth();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [globalFields, setGlobalFields] = useState<GlobalField[]>([]);
   const [view, setView] = useState<ViewState>({ mode: 'list' });
 
+  // 初期データ読み込み
   useEffect(() => {
-    Promise.all([
-      AsyncStorage.getItem(STORAGE_KEY),
-      AsyncStorage.getItem(GLOBAL_FIELDS_KEY),
-    ])
-      .then(([companiesJson, fieldsJson]) => {
-        if (companiesJson) setCompanies(JSON.parse(companiesJson));
-        if (fieldsJson) setGlobalFields(JSON.parse(fieldsJson));
-      })
-      .catch(() => {});
-  }, []);
+    if (!uid) return;
+    if (isDemo) {
+      Promise.all([
+        AsyncStorage.getItem(STORAGE_KEY),
+        AsyncStorage.getItem(GLOBAL_FIELDS_KEY),
+      ]).then(([cJson, fJson]) => {
+        if (cJson) setCompanies(JSON.parse(cJson));
+        if (fJson) setGlobalFields(JSON.parse(fJson));
+      }).catch(() => {});
+    } else {
+      Promise.all([
+        getDocs(collection(db, 'users', uid, 'job_companies')),
+        getDoc(doc(db, 'users', uid, 'job_settings', 'global_fields')),
+      ]).then(([snap, fSnap]) => {
+        setCompanies(snap.docs.map(d => d.data() as Company));
+        if (fSnap.exists()) setGlobalFields(fSnap.data().fields ?? []);
+      }).catch(() => {});
+    }
+  }, [uid, isDemo]);
 
-  const persist = useCallback((list: Company[]) => {
-    setCompanies(list);
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(list)).catch(() => {});
-  }, []);
+  // 企業を保存（追加・更新）
+  const saveCompany = useCallback((company: Company) => {
+    setCompanies(prev => {
+      const next = prev.find(c => c.id === company.id)
+        ? prev.map(c => c.id === company.id ? company : c)
+        : [...prev, company];
+      if (isDemo) AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+    if (!isDemo && uid) {
+      setDoc(doc(db, 'users', uid, 'job_companies', company.id), company).catch(() => {});
+    }
+  }, [uid, isDemo]);
 
+  // 企業を削除
+  const removeCompany = useCallback((companyId: string) => {
+    setCompanies(prev => {
+      const next = prev.filter(c => c.id !== companyId);
+      if (isDemo) AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+    if (!isDemo && uid) {
+      deleteDoc(doc(db, 'users', uid, 'job_companies', companyId)).catch(() => {});
+    }
+  }, [uid, isDemo]);
+
+  // 全社共通項目を保存
   const persistGlobalFields = useCallback((fields: GlobalField[]) => {
     setGlobalFields(fields);
-    AsyncStorage.setItem(GLOBAL_FIELDS_KEY, JSON.stringify(fields)).catch(() => {});
-  }, []);
+    if (isDemo) {
+      AsyncStorage.setItem(GLOBAL_FIELDS_KEY, JSON.stringify(fields)).catch(() => {});
+    } else if (uid) {
+      setDoc(doc(db, 'users', uid, 'job_settings', 'global_fields'), { fields }).catch(() => {});
+    }
+  }, [uid, isDemo]);
 
   if (view.mode === 'new') {
     return (
@@ -1113,8 +1160,8 @@ function JobManagementScreen() {
         isNew
         globalFields={globalFields}
         onUpdateGlobalFields={persistGlobalFields}
-        onSave={c => persist([...companies, c])}
-        onDelete={() => {/* nothing to delete – draft was never persisted */}}
+        onSave={saveCompany}
+        onDelete={() => {/* ドラフトはまだ未保存のため削除不要 */}}
         onBack={() => setView({ mode: 'list' })}
       />
     );
@@ -1132,8 +1179,8 @@ function JobManagementScreen() {
         isNew={false}
         globalFields={globalFields}
         onUpdateGlobalFields={persistGlobalFields}
-        onSave={updated => persist(companies.map(c => c.id === updated.id ? updated : c))}
-        onDelete={() => persist(companies.filter(c => c.id !== view.companyId))}
+        onSave={saveCompany}
+        onDelete={() => removeCompany(view.companyId)}
         onBack={() => setView({ mode: 'list' })}
       />
     );

@@ -16,6 +16,7 @@ type AuthContextType = {
   isAuthenticated: boolean;
   isLoading: boolean;
   isDemo: boolean;
+  uid: string | null;
   email: string | null;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
@@ -153,6 +154,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const isAuthenticated = isDemoMode ? demoLoggedIn : user !== null;
+  const uid = isDemoMode ? (demoLoggedIn ? 'demo' : null) : (user?.uid ?? null);
   const email = isDemoMode ? demoEmail : (user?.email ?? null);
 
   return (
@@ -161,6 +163,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isAuthenticated,
         isLoading,
         isDemo: isDemoMode,
+        uid,
         email,
         login,
         register,
