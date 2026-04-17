@@ -52,7 +52,6 @@ const SELECTION_STATUS_OPTIONS: string[] = [
   '未着手',
   'ES作成中',
   'ES提出済',
-  '書類選考中',
   '適性検査待ち',
   '一次面接待ち',
   '一次面接済',
