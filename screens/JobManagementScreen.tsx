@@ -976,9 +976,10 @@ function CompanyListScreen({ companies, onSelect, onAdd }: CompanyListScreenProp
         renderItem={({ item }) => {
           const pc = pendingCount(item);
           return (
-            <TouchableOpacity style={lS.card} onPress={() => onSelect(item.id)} activeOpacity={0.75}>
+            <View style={lS.card}>
               <View style={lS.cardTop}>
                 <TouchableOpacity
+                  style={lS.cardNameWrap}
                   onPress={() => item.myPageUrl ? Linking.openURL(item.myPageUrl) : null}
                   disabled={!item.myPageUrl}
                   hitSlop={{ top: 4, bottom: 4 }}
@@ -990,11 +991,21 @@ function CompanyListScreen({ companies, onSelect, onAdd }: CompanyListScreenProp
                     {item.name || '（会社名未設定）'}
                   </Text>
                 </TouchableOpacity>
-                {item.desireLevel ? (
-                  <View style={[lS.desireBadge, { backgroundColor: DESIRE_COLOR[item.desireLevel as DesireLevel] }]}>
-                    <Text style={lS.badgeText}>{item.desireLevel}</Text>
-                  </View>
-                ) : null}
+                <View style={lS.cardTopRight}>
+                  {item.desireLevel ? (
+                    <View style={[lS.desireBadge, { backgroundColor: DESIRE_COLOR[item.desireLevel as DesireLevel] }]}>
+                      <Text style={lS.badgeText}>{item.desireLevel}</Text>
+                    </View>
+                  ) : null}
+                  <TouchableOpacity
+                    style={lS.editBtn}
+                    onPress={() => onSelect(item.id)}
+                    accessibilityLabel={`${item.name}を編集`}
+                    accessibilityRole="button"
+                  >
+                    <Text style={lS.editBtnText}>編集</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
               <View style={lS.cardMid}>
@@ -1013,7 +1024,7 @@ function CompanyListScreen({ companies, onSelect, onAdd }: CompanyListScreenProp
                   <Text style={lS.taskAlertText}>未完了タスク {pc} 件</Text>
                 </View>
               )}
-            </TouchableOpacity>
+            </View>
           );
         }}
       />
@@ -1098,9 +1109,18 @@ const lS = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: 8,
   },
-  companyName: { fontSize: 17, fontWeight: 'bold', color: C.text, flex: 1, marginRight: 8 },
+  cardNameWrap: { flex: 1, marginRight: 8 },
+  companyName: { fontSize: 17, fontWeight: 'bold', color: C.text },
   companyNameLink: { color: C.primary, textDecorationLine: 'underline' },
+  cardTopRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   desireBadge: { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 3 },
+  editBtn: {
+    backgroundColor: C.primary,
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  editBtnText: { color: '#FFF', fontSize: 12, fontWeight: 'bold' },
   goalBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2, marginRight: 8 },
   badgeText: { color: C.card, fontSize: 12, fontWeight: 'bold' },
   cardMid: { flexDirection: 'row', alignItems: 'center' },
