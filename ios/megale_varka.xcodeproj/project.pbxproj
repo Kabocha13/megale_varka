@@ -277,7 +277,7 @@
 					"-ObjC",
 					"-lc++",
 				);
-				"PRODUCT_BUNDLE_IDENTIFIER[sdk=iphoneos*]" = "com.kabocha13.megale-varka";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.kabocha13.megale-varka";
 				PRODUCT_NAME = megale_varka;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -307,7 +307,7 @@
 					"-ObjC",
 					"-lc++",
 				);
-				"PRODUCT_BUNDLE_IDENTIFIER[sdk=iphoneos*]" = "com.kabocha13.megale-varka";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.kabocha13.megale-varka";
 				PRODUCT_NAME = megale_varka;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_VERSION = 5.0;
