@@ -1,32 +1,20 @@
 import React from 'react';
-import { Text, View } from 'react-native';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
-const EMOJIS = {
-  home: '🏠',
-  job_management: '💼',
-  consultation: '💬',
-  settings: '⚙️',
-};
+type Props = { color: string; size: number };
 
-type Props = {
-  name: keyof typeof EMOJIS;
-  active: boolean;
-  activeColor: string;
-};
+export function HomeIcon({ color, size }: Props) {
+  return <MaterialIcons name="home" color={color} size={size} />;
+}
 
-export function NavTabIcon({ name, active, activeColor }: Props) {
-  return (
-    <View style={{ alignItems: 'center' }}>
-      <Text style={{ fontSize: 24, opacity: active ? 1 : 0.35 }}>
-        {EMOJIS[name] ?? '❓'}
-      </Text>
-      <View style={{
-        width: 5,
-        height: 5,
-        borderRadius: 2.5,
-        backgroundColor: active ? activeColor : 'transparent',
-        marginTop: 3,
-      }} />
-    </View>
-  );
+export function WorkIcon({ color, size }: Props) {
+  return <MaterialIcons name="business-center" color={color} size={size} />;
+}
+
+export function ChatIcon({ color, size }: Props) {
+  return <MaterialIcons name="forum" color={color} size={size} />;
+}
+
+export function SettingsIcon({ color, size }: Props) {
+  return <MaterialIcons name="settings" color={color} size={size} />;
 }
