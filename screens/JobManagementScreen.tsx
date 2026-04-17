@@ -385,6 +385,11 @@ const gfS = StyleSheet.create({
 
 // ─── Date/Time helpers ───────────────────────────────────────────────────────
 
+function normalizeUrl(url: string): string {
+  if (!url) return url;
+  return /^https?:\/\//i.test(url) ? url : `https://${url}`;
+}
+
 function parseDate(s: string): Date {
   if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date();
   const [y, m, d] = s.split('-').map(Number);
@@ -1029,7 +1034,7 @@ function ViewRow({
     <View style={[vS.row, last && vS.rowLast]}>
       <Text style={vS.rowLabel}>{label}</Text>
       {isUrl && value ? (
-        <TouchableOpacity onPress={() => Linking.openURL(value)} hitSlop={{ top: 4, bottom: 4 }}>
+        <TouchableOpacity onPress={() => Linking.openURL(normalizeUrl(value))} hitSlop={{ top: 4, bottom: 4 }}>
           <Text style={vS.rowValueLink} numberOfLines={1}>{value}</Text>
         </TouchableOpacity>
       ) : (
@@ -1206,7 +1211,7 @@ function CompanyListScreen({ companies, onSelect, onEdit, onAdd }: CompanyListSc
               <View style={lS.cardTop}>
                 <TouchableOpacity
                   style={lS.cardNameWrap}
-                  onPress={() => item.myPageUrl ? Linking.openURL(item.myPageUrl) : null}
+                  onPress={() => item.myPageUrl ? Linking.openURL(normalizeUrl(item.myPageUrl)) : null}
                   disabled={!item.myPageUrl}
                   hitSlop={{ top: 4, bottom: 4 }}
                 >
