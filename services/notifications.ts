@@ -6,20 +6,27 @@ import notifee, {
   TriggerType,
 } from '@notifee/react-native';
 
-export const REMINDER_DAYS_KEY = '@reminder_days_v1';
-export const DEFAULT_REMINDER_DAYS = 1;
+export const REMINDER_DAYS_KEY = '@reminder_days_v2';
+export const DEFAULT_REMINDER_DAYS: number[] = [1];
+export const ALL_REMINDER_DAY_OPTIONS = [0, 1, 2, 3, 7, 14];
 
 const CHANNEL_ID = 'job_tasks';
 
 // ─── 設定 ─────────────────────────────────────────────────────────────────────
 
-export async function getReminderDays(): Promise<number> {
+export async function getReminderDays(): Promise<number[]> {
   const val = await AsyncStorage.getItem(REMINDER_DAYS_KEY);
-  return val !== null ? parseInt(val, 10) : DEFAULT_REMINDER_DAYS;
+  if (val === null) return DEFAULT_REMINDER_DAYS;
+  try {
+    const parsed = JSON.parse(val);
+    return Array.isArray(parsed) ? parsed : [parsed];
+  } catch {
+    return DEFAULT_REMINDER_DAYS;
+  }
 }
 
-export async function saveReminderDays(days: number): Promise<void> {
-  await AsyncStorage.setItem(REMINDER_DAYS_KEY, String(days));
+export async function saveReminderDays(days: number[]): Promise<void> {
+  await AsyncStorage.setItem(REMINDER_DAYS_KEY, JSON.stringify(days));
 }
 
 // ─── 権限 ─────────────────────────────────────────────────────────────────────
@@ -51,41 +58,46 @@ export async function scheduleTaskNotification(
   companyName: string,
   deadline: string,
   time: string,
-  reminderDays: number,
+  reminderDaysList: number[],
 ): Promise<void> {
   const parts = deadline.split('-').map(Number);
   if (parts.length !== 3 || parts.some(isNaN)) return;
   const [year, month, day] = parts;
-
   const [h, m] = (time || '23:59').split(':').map(Number);
-  const notifyDate = new Date(year, month - 1, day, h, m, 0);
-  notifyDate.setDate(notifyDate.getDate() - reminderDays);
 
-  if (notifyDate.getTime() <= Date.now()) {
-    await cancelTaskNotification(taskId);
-    return;
-  }
+  await cancelTaskNotification(taskId);
 
   const channelId = await ensureChannel();
-  const trigger: TimestampTrigger = {
-    type: TriggerType.TIMESTAMP,
-    timestamp: notifyDate.getTime(),
-  };
 
-  const label = reminderDays === 0 ? '本日期限' : `${reminderDays}日前`;
+  for (const reminderDays of reminderDaysList) {
+    const notifyDate = new Date(year, month - 1, day, h, m, 0);
+    notifyDate.setDate(notifyDate.getDate() - reminderDays);
 
-  await notifee.createTriggerNotification(
-    {
-      id: taskId,
-      title: `【${label}】${companyName}`,
-      body: taskTitle || 'タスクの期限が近づいています',
-      android: { channelId, importance: AndroidImportance.HIGH },
-      ios: { sound: 'default' },
-    },
-    trigger,
-  );
+    if (notifyDate.getTime() <= Date.now()) continue;
+
+    const label = reminderDays === 0 ? '本日期限' : `${reminderDays}日前`;
+    const trigger: TimestampTrigger = {
+      type: TriggerType.TIMESTAMP,
+      timestamp: notifyDate.getTime(),
+    };
+
+    await notifee.createTriggerNotification(
+      {
+        id: `${taskId}_${reminderDays}d`,
+        title: `【${label}】${companyName}`,
+        body: taskTitle || 'タスクの期限が近づいています',
+        android: { channelId, importance: AndroidImportance.HIGH },
+        ios: { sound: 'default' },
+      },
+      trigger,
+    );
+  }
 }
 
 export async function cancelTaskNotification(taskId: string): Promise<void> {
-  await notifee.cancelTriggerNotification(taskId);
+  await Promise.all(
+    ALL_REMINDER_DAY_OPTIONS.map(d =>
+      notifee.cancelTriggerNotification(`${taskId}_${d}d`).catch(() => {}),
+    ),
+  );
 }
