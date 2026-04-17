@@ -19,7 +19,7 @@ type Props = {
 };
 
 function LoginScreen({ onNavigateToRegister, onNavigateToForgotPassword }: Props) {
-  const { login, loginAsDemo } = useAuth();
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -83,14 +83,6 @@ function LoginScreen({ onNavigateToRegister, onNavigateToForgotPassword }: Props
         )}
       </TouchableOpacity>
 
-      <TouchableOpacity
-        style={styles.demoButton}
-        onPress={loginAsDemo}
-        disabled={submitting}
-      >
-        <Text style={styles.demoButtonText}>デモとして試す</Text>
-      </TouchableOpacity>
-
       <View style={styles.divider} />
 
       <TouchableOpacity onPress={onNavigateToForgotPassword} disabled={submitting} style={styles.forgotPassword}>
@@ -142,20 +134,6 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: '#F2EBE4',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  demoButton: {
-    width: '100%',
-    borderWidth: 1,
-    borderColor: '#304E78',
-    borderRadius: 8,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  demoButtonText: {
-    color: '#304E78',
     fontSize: 16,
     fontWeight: 'bold',
   },
