@@ -31,12 +31,6 @@ interface Task {
   completed: boolean;
 }
 
-interface CustomField {
-  id: string;
-  label: string;
-  value: string;
-}
-
 interface Company {
   id: string;
   name: string;
@@ -46,7 +40,6 @@ interface Company {
   selectionStatus: string;
   desireLevel: DesireLevel | '';
   tasks: Task[];
-  customFields: CustomField[];
   globalFieldValues: Record<string, string>;
   memo: string;
 }
@@ -126,7 +119,6 @@ function makeEmptyCompany(): Company {
     selectionStatus: '',
     desireLevel: '',
     tasks: [],
-    customFields: [],
     globalFieldValues: {},
     memo: '',
   };
@@ -804,15 +796,6 @@ function CompanyDetailScreen({ company, isNew, globalFields, onUpdateGlobalField
   const deleteTask = (id: string) =>
     set('tasks', form.tasks.filter(x => x.id !== id));
 
-  const addCustomField = () =>
-    set('customFields', [...form.customFields, { id: uid(), label: '', value: '' }]);
-
-  const updateCustomField = (id: string, patch: Partial<CustomField>) =>
-    set('customFields', form.customFields.map(f => f.id === id ? { ...f, ...patch } : f));
-
-  const deleteCustomField = (id: string) =>
-    set('customFields', form.customFields.filter(f => f.id !== id));
-
   return (
     <View style={dS.root}>
       {/* Nav header */}
@@ -950,44 +933,6 @@ function CompanyDetailScreen({ company, isNew, globalFields, onUpdateGlobalField
           )}
         </View>
 
-        {/* この企業だけの項目 */}
-        <View style={dS.subHeader}>
-          <Text style={dS.subHeaderTitle}>この企業だけの項目</Text>
-        </View>
-        <View style={dS.section}>
-          {form.customFields.length === 0 && (
-            <Text style={dS.emptySectionText}>項目はありません</Text>
-          )}
-          {form.customFields.map(field => (
-            <View key={field.id} style={dS.customRow}>
-              <TextInput
-                style={[dS.input, dS.customLabel]}
-                value={field.label}
-                onChangeText={v => updateCustomField(field.id, { label: v })}
-                placeholder="項目名"
-                placeholderTextColor={C.muted}
-              />
-              <TextInput
-                style={[dS.input, dS.customValue]}
-                value={field.value}
-                onChangeText={v => updateCustomField(field.id, { value: v })}
-                placeholder="値"
-                placeholderTextColor={C.muted}
-              />
-              <TouchableOpacity
-                onPress={() => deleteCustomField(field.id)}
-                style={dS.customDelete}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Text style={dS.customDeleteText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-          ))}
-          <TouchableOpacity style={dS.addBtn} onPress={addCustomField}>
-            <Text style={dS.addBtnText}>＋ 項目を追加</Text>
-          </TouchableOpacity>
-        </View>
-
         {/* Delete company */}
         {!isNew && (
           <TouchableOpacity style={dS.deleteCompanyBtn} onPress={handleDelete}>
@@ -1115,11 +1060,6 @@ const dS = StyleSheet.create({
   },
   addBtnText: { color: C.primary, fontSize: 14 },
   emptySectionText: { color: C.muted, fontSize: 13, textAlign: 'center', marginBottom: 8 },
-  customRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  customLabel: { flex: 2, marginRight: 6 },
-  customValue: { flex: 3, marginRight: 6 },
-  customDelete: { padding: 4 },
-  customDeleteText: { color: C.danger, fontSize: 16 },
   deleteCompanyBtn: {
     marginTop: 24,
     paddingVertical: 14,
