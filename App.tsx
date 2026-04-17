@@ -115,6 +115,18 @@ function AppContent() {
             key={tab}
             style={styles.tabItem}
             onPress={() => setActiveTab(tab)}
+            accessible={true}
+            accessibilityRole="tab"
+            accessibilityLabel={
+              tab === 'home'
+                ? 'Home'
+                : tab === 'job_management'
+                ? 'Job management'
+                : tab === 'consultation'
+                ? 'Consultation'
+                : 'Settings'
+            }
+            accessibilityState={{ selected: activeTab === tab }}
           >
             <TabIcon name={tab} active={activeTab === tab} />
           </TouchableOpacity>
