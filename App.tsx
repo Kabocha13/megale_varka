@@ -32,6 +32,7 @@ function TabIcon({ name, active }: { name: TabName; active: boolean }) {
     case 'job_management': return <WorkIcon color={color} size={ICON_SIZE} />;
     case 'consultation':   return <ChatIcon color={color} size={ICON_SIZE} />;
     case 'settings':       return <SettingsIcon color={color} size={ICON_SIZE} />;
+    default:               return null;
   }
 }
 
