@@ -8,35 +8,36 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
 import HealthCareScreen from './screens/HealthCareScreen';
-import HealthMaintenanceScreen from './screens/HealthMaintenanceScreen';
 import JobManagementScreen from './screens/JobManagementScreen';
 import JobSupportScreen from './screens/JobSupportScreen';
-import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
+import SettingsScreen from './screens/SettingsScreen';
 
-type TabName = 'health_care' | 'health_maintenance' | 'job_management' | 'job_support';
+type TabName = 'home' | 'job_management' | 'consultation' | 'settings';
 type AuthScreen = 'login' | 'register' | 'forgot_password';
 
-const TABS: { name: TabName; label: string }[] = [
-  { name: 'health_care', label: '健康管理' },
-  { name: 'health_maintenance', label: '健康改善' },
-  { name: 'job_management', label: '就活管理' },
-  { name: 'job_support', label: '就活サポート' },
+const TABS: { name: TabName; icon: string }[] = [
+  { name: 'home', icon: 'home' },
+  { name: 'job_management', icon: 'work' },
+  { name: 'consultation', icon: 'chat' },
+  { name: 'settings', icon: 'settings' },
 ];
 
 function renderScreen(tab: TabName) {
   switch (tab) {
-    case 'health_care':
+    case 'home':
       return <HealthCareScreen />;
-    case 'health_maintenance':
-      return <HealthMaintenanceScreen />;
     case 'job_management':
       return <JobManagementScreen />;
-    case 'job_support':
+    case 'consultation':
       return <JobSupportScreen />;
+    case 'settings':
+      return <SettingsScreen />;
   }
 }
 
@@ -63,8 +64,8 @@ const demoBannerStyles = StyleSheet.create({
 });
 
 function AppContent() {
-  const { isAuthenticated, isLoading, isDemo, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState<TabName>('health_care');
+  const { isAuthenticated, isLoading, isDemo } = useAuth();
+  const [activeTab, setActiveTab] = useState<TabName>('home');
   const [authScreen, setAuthScreen] = useState<AuthScreen>('login');
 
   if (isLoading) {
@@ -102,25 +103,22 @@ function AppContent() {
         {renderScreen(activeTab)}
       </View>
       <View style={styles.tabBar}>
-        {TABS.map(tab => (
-          <TouchableOpacity
-            key={tab.name}
-            style={styles.tabItem}
-            onPress={() => setActiveTab(tab.name)}
-          >
-            <Text
-              style={[
-                styles.tabLabel,
-                activeTab === tab.name && styles.tabLabelActive,
-              ]}
+        {TABS.map(tab => {
+          const isActive = activeTab === tab.name;
+          return (
+            <TouchableOpacity
+              key={tab.name}
+              style={styles.tabItem}
+              onPress={() => setActiveTab(tab.name)}
             >
-              {tab.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-        <TouchableOpacity style={styles.tabItem} onPress={logout}>
-          <Text style={styles.tabLabel}>ログアウト</Text>
-        </TouchableOpacity>
+              <Icon
+                name={tab.icon}
+                size={28}
+                color={isActive ? '#304E78' : '#A8BDD4'}
+              />
+            </TouchableOpacity>
+          );
+        })}
       </View>
     </SafeAreaView>
   );
@@ -150,21 +148,13 @@ const styles = StyleSheet.create({
   tabBar: {
     flexDirection: 'row',
     borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-    backgroundColor: '#ffffff',
+    borderTopColor: '#D9D0C8',
+    backgroundColor: '#F2EBE4',
   },
   tabItem: {
     flex: 1,
     alignItems: 'center',
     paddingVertical: 12,
-  },
-  tabLabel: {
-    fontSize: 12,
-    color: '#999999',
-  },
-  tabLabelActive: {
-    color: '#000000',
-    fontWeight: 'bold',
   },
 });
 
