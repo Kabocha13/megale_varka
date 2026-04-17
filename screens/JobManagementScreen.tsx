@@ -499,6 +499,202 @@ const tiS = StyleSheet.create({
   deleteBtnText: { color: C.danger, fontSize: 13 },
 });
 
+// ─── SearchFilterModal ────────────────────────────────────────────────────────
+
+interface FilterState {
+  query: string;
+  desireLevel: DesireLevel | '';
+  goal: GoalType | '';
+  hasTask: boolean;
+}
+
+const EMPTY_FILTER: FilterState = { query: '', desireLevel: '', goal: '', hasTask: false };
+
+interface SearchFilterModalProps {
+  visible: boolean;
+  filter: FilterState;
+  onApply: (f: FilterState) => void;
+  onClose: () => void;
+}
+
+function SearchFilterModal({ visible, filter, onApply, onClose }: SearchFilterModalProps) {
+  const [draft, setDraft] = useState<FilterState>(filter);
+
+  useEffect(() => {
+    if (visible) setDraft(filter);
+  }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const set = <K extends keyof FilterState>(key: K, value: FilterState[K]) =>
+    setDraft(f => ({ ...f, [key]: value }));
+
+  const toggle = (key: 'goal' | 'desireLevel', value: string) =>
+    setDraft(f => ({ ...f, [key]: f[key] === value ? '' : value }));
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <TouchableOpacity style={sfS.overlay} activeOpacity={1} onPress={onClose}>
+        <TouchableOpacity activeOpacity={1} style={sfS.sheet}>
+          <View style={sfS.handle} />
+
+          <View style={sfS.titleRow}>
+            <Text style={sfS.title}>検索・絞り込み</Text>
+            <TouchableOpacity onPress={() => setDraft(EMPTY_FILTER)}>
+              <Text style={sfS.resetText}>リセット</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* 企業名 */}
+          <Text style={sfS.label}>企業名</Text>
+          <TextInput
+            style={sfS.input}
+            value={draft.query}
+            onChangeText={v => set('query', v)}
+            placeholder="企業名で検索"
+            placeholderTextColor={C.muted}
+            autoCorrect={false}
+          />
+
+          {/* 目標 */}
+          <Text style={sfS.label}>目標</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={sfS.chipRow}>
+            {GOAL_OPTIONS.map(g => (
+              <TouchableOpacity
+                key={g}
+                style={[sfS.chip, draft.goal === g && sfS.chipActive]}
+                onPress={() => toggle('goal', g)}
+              >
+                <Text style={[sfS.chipText, draft.goal === g && sfS.chipTextActive]}>{g}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {/* 志望度 */}
+          <Text style={sfS.label}>志望度</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={sfS.chipRow}>
+            {DESIRE_OPTIONS.map(d => (
+              <TouchableOpacity
+                key={d}
+                style={[sfS.chip, draft.desireLevel === d && sfS.chipActive]}
+                onPress={() => toggle('desireLevel', d)}
+              >
+                <Text style={[sfS.chipText, draft.desireLevel === d && sfS.chipTextActive]}>{d}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {/* 未完了タスクあり */}
+          <TouchableOpacity
+            style={sfS.toggleRow}
+            onPress={() => set('hasTask', !draft.hasTask)}
+            activeOpacity={0.7}
+          >
+            <Text style={sfS.toggleLabel}>未完了タスクがある企業のみ</Text>
+            <View style={[sfS.track, draft.hasTask && sfS.trackOn]}>
+              <View style={[sfS.knob, draft.hasTask && sfS.knobOn]} />
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={sfS.applyBtn} onPress={() => onApply(draft)}>
+            <Text style={sfS.applyBtnText}>この条件で絞り込む</Text>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  );
+}
+
+const sfS = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: C.card,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    paddingBottom: 36,
+  },
+  handle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: C.border,
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  title: { fontSize: 17, fontWeight: 'bold', color: C.text },
+  resetText: { fontSize: 14, color: C.danger },
+  label: { fontSize: 12, fontWeight: 'bold', color: C.sub, marginBottom: 8, marginTop: 14 },
+  input: {
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: C.text,
+    backgroundColor: '#FAFAFA',
+  },
+  chipRow: { paddingBottom: 4 },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#F0F0F0',
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  chipActive: { backgroundColor: C.primary, borderColor: C.primary },
+  chipText: { fontSize: 13, color: C.sub },
+  chipTextActive: { color: C.card, fontWeight: 'bold' },
+  toggleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 16,
+    paddingVertical: 4,
+  },
+  toggleLabel: { fontSize: 15, color: C.text },
+  track: {
+    width: 44,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: C.border,
+    justifyContent: 'center',
+    padding: 2,
+  },
+  trackOn: { backgroundColor: C.primary },
+  knob: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: C.card,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  knobOn: { alignSelf: 'flex-end' },
+  applyBtn: {
+    marginTop: 20,
+    backgroundColor: C.primary,
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  applyBtnText: { color: C.card, fontSize: 15, fontWeight: 'bold' },
+});
+
 // ─── CompanyListScreen ────────────────────────────────────────────────────────
 
 interface CompanyListScreenProps {
@@ -508,13 +704,17 @@ interface CompanyListScreenProps {
 }
 
 function CompanyListScreen({ companies, onSelect, onAdd }: CompanyListScreenProps) {
-  const [filterDesire, setFilterDesire] = useState<DesireLevel | 'all'>('all');
-  const [filterGoal, setFilterGoal] = useState<GoalType | 'all'>('all');
+  const [showFilter, setShowFilter] = useState(false);
+  const [filter, setFilter] = useState<FilterState>(EMPTY_FILTER);
 
-  const sorted = companies
+  const isFiltered = !!(filter.query || filter.desireLevel || filter.goal || filter.hasTask);
+
+  const displayed = companies
     .filter(c => {
-      if (filterDesire !== 'all' && c.desireLevel !== filterDesire) return false;
-      if (filterGoal !== 'all' && c.currentGoal !== filterGoal) return false;
+      if (filter.query && !c.name.toLowerCase().includes(filter.query.toLowerCase())) return false;
+      if (filter.desireLevel && c.desireLevel !== filter.desireLevel) return false;
+      if (filter.goal && c.currentGoal !== filter.goal) return false;
+      if (filter.hasTask && c.tasks.filter(t => !t.completed).length === 0) return false;
       return true;
     })
     .sort((a, b) => {
@@ -527,56 +727,43 @@ function CompanyListScreen({ companies, onSelect, onAdd }: CompanyListScreenProp
 
   return (
     <View style={lS.root}>
-      <Text style={lS.header}>就活管理</Text>
-
-      {/* Desire filter */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={lS.filterRow}
-        contentContainerStyle={lS.filterContent}
-      >
-        {(['all', ...DESIRE_OPTIONS] as const).map(d => (
+      {/* ヘッダー */}
+      <View style={lS.navBar}>
+        <Text style={lS.navTitle}>就活管理</Text>
+        <View style={lS.navActions}>
           <TouchableOpacity
-            key={d}
-            style={[lS.chip, filterDesire === d && lS.chipActive]}
-            onPress={() => setFilterDesire(d === filterDesire && d !== 'all' ? 'all' : d)}
+            style={[lS.iconBtn, isFiltered && lS.iconBtnActive]}
+            onPress={() => setShowFilter(true)}
+            accessibilityLabel="検索・絞り込み"
           >
-            <Text style={[lS.chipText, filterDesire === d && lS.chipTextActive]}>
-              {d === 'all' ? 'すべて' : d}
-            </Text>
+            <Text style={lS.iconBtnText}>🔍</Text>
+            {isFiltered && <View style={lS.filterDot} />}
           </TouchableOpacity>
-        ))}
-      </ScrollView>
+          <TouchableOpacity style={lS.addBtn} onPress={onAdd} accessibilityLabel="企業を追加">
+            <Text style={lS.addBtnText}>＋</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
 
-      {/* Goal filter */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={lS.filterRow}
-        contentContainerStyle={lS.filterContent}
-      >
-        {(['all', ...GOAL_OPTIONS] as const).map(g => (
-          <TouchableOpacity
-            key={g}
-            style={[lS.chip, lS.chipGoal, filterGoal === g && lS.chipGoalActive]}
-            onPress={() => setFilterGoal(g === filterGoal && g !== 'all' ? 'all' : g)}
-          >
-            <Text style={[lS.chipText, filterGoal === g && lS.chipTextActive]}>
-              {g === 'all' ? '目標：全て' : g}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      {/* 絞り込み中バナー */}
+      {isFiltered && (
+        <TouchableOpacity style={lS.filterBanner} onPress={() => setFilter(EMPTY_FILTER)}>
+          <Text style={lS.filterBannerText}>絞り込み中　 ✕ クリア</Text>
+        </TouchableOpacity>
+      )}
 
       <FlatList
-        data={sorted}
+        data={displayed}
         keyExtractor={item => item.id}
         contentContainerStyle={lS.list}
         ListEmptyComponent={
           <View style={lS.empty}>
-            <Text style={lS.emptyTitle}>企業が登録されていません</Text>
-            <Text style={lS.emptySub}>右下の ＋ ボタンから追加できます</Text>
+            <Text style={lS.emptyTitle}>
+              {isFiltered ? '条件に一致する企業がありません' : '企業が登録されていません'}
+            </Text>
+            <Text style={lS.emptySub}>
+              {isFiltered ? '絞り込み条件を変更してください' : '右上の ＋ ボタンから追加できます'}
+            </Text>
           </View>
         }
         renderItem={({ item }) => {
@@ -624,40 +811,69 @@ function CompanyListScreen({ companies, onSelect, onAdd }: CompanyListScreenProp
         }}
       />
 
-      <TouchableOpacity style={lS.fab} onPress={onAdd} accessibilityLabel="企業を追加">
-        <Text style={lS.fabIcon}>＋</Text>
-      </TouchableOpacity>
+      <SearchFilterModal
+        visible={showFilter}
+        filter={filter}
+        onApply={f => { setFilter(f); setShowFilter(false); }}
+        onClose={() => setShowFilter(false)}
+      />
     </View>
   );
 }
 
 const lS = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
-  header: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: C.primary,
+  navBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 8,
+    paddingBottom: 12,
+    backgroundColor: C.bg,
   },
-  filterRow: { maxHeight: 42, paddingLeft: 12, marginBottom: 4 },
-  filterContent: { paddingRight: 12, alignItems: 'center' },
-  chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 16,
+  navTitle: { fontSize: 22, fontWeight: 'bold', color: C.primary },
+  navActions: { flexDirection: 'row', alignItems: 'center' },
+  iconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: C.card,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginRight: 8,
     borderWidth: 1,
     borderColor: C.border,
   },
-  chipActive: { backgroundColor: C.primary, borderColor: C.primary },
-  chipGoal: { backgroundColor: '#EEF5FF', borderColor: '#90CAF9' },
-  chipGoalActive: { backgroundColor: '#1E88E5', borderColor: '#1E88E5' },
-  chipText: { fontSize: 13, color: C.sub },
-  chipTextActive: { color: C.card, fontWeight: 'bold' },
-  list: { padding: 12, paddingBottom: 88 },
+  iconBtnActive: { borderColor: C.primary, backgroundColor: '#EBF0F8' },
+  iconBtnText: { fontSize: 18 },
+  filterDot: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: C.danger,
+  },
+  addBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: C.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addBtnText: { color: C.card, fontSize: 24, lineHeight: 28 },
+  filterBanner: {
+    backgroundColor: '#EBF0F8',
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+  },
+  filterBannerText: { fontSize: 13, color: C.primary, fontWeight: 'bold' },
+  list: { padding: 12, paddingBottom: 32 },
   card: {
     backgroundColor: C.card,
     borderRadius: 12,
@@ -675,13 +891,7 @@ const lS = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: 8,
   },
-  companyName: {
-    fontSize: 17,
-    fontWeight: 'bold',
-    color: C.text,
-    flex: 1,
-    marginRight: 8,
-  },
+  companyName: { fontSize: 17, fontWeight: 'bold', color: C.text, flex: 1, marginRight: 8 },
   companyNameLink: { color: C.primary, textDecorationLine: 'underline' },
   desireBadge: { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 3 },
   goalBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2, marginRight: 8 },
@@ -700,23 +910,6 @@ const lS = StyleSheet.create({
   empty: { alignItems: 'center', paddingTop: 72 },
   emptyTitle: { fontSize: 16, color: C.sub, marginBottom: 6 },
   emptySub: { fontSize: 13, color: C.muted },
-  fab: {
-    position: 'absolute',
-    bottom: 24,
-    right: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: C.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 7,
-  },
-  fabIcon: { color: C.card, fontSize: 28, lineHeight: 32 },
 });
 
 // ─── SelectField ──────────────────────────────────────────────────────────────
