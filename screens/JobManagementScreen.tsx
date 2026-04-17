@@ -902,15 +902,241 @@ const sfS = StyleSheet.create({
   applyBtnText: { color: C.card, fontSize: 15, fontWeight: 'bold' },
 });
 
+// ─── CompanyViewScreen（読み取り専用詳細） ────────────────────────────────────
+
+interface CompanyViewScreenProps {
+  company: Company;
+  globalFields: GlobalField[];
+  onEdit: () => void;
+  onBack: () => void;
+}
+
+function CompanyViewScreen({ company, globalFields, onEdit, onBack }: CompanyViewScreenProps) {
+  const pendingTasks = company.tasks.filter(t => !t.completed);
+  const doneTasks = company.tasks.filter(t => t.completed);
+
+  return (
+    <View style={vS.root}>
+      {/* ヘッダー */}
+      <View style={vS.navBar}>
+        <TouchableOpacity style={vS.backBtn} onPress={onBack} accessibilityRole="button" accessibilityLabel="一覧に戻る">
+          <Text style={vS.backBtnText}>‹ 戻る</Text>
+        </TouchableOpacity>
+        <Text style={vS.navTitle} numberOfLines={1}>{company.name || '（会社名未設定）'}</Text>
+        <TouchableOpacity style={vS.editBtn} onPress={onEdit} accessibilityRole="button" accessibilityLabel="編集">
+          <Text style={vS.editBtnText}>編集</Text>
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView style={vS.scroll} contentContainerStyle={vS.content}>
+        {/* バッジ行 */}
+        <View style={vS.badgeRow}>
+          {company.desireLevel ? (
+            <View style={[vS.desireBadge, { backgroundColor: DESIRE_COLOR[company.desireLevel as DesireLevel] }]}>
+              <Text style={vS.badgeText}>{company.desireLevel}</Text>
+            </View>
+          ) : null}
+          {company.currentGoal ? (
+            <View style={[vS.goalBadge, { backgroundColor: GOAL_COLOR[company.currentGoal as GoalType] }]}>
+              <Text style={vS.badgeText}>{company.currentGoal}</Text>
+            </View>
+          ) : null}
+          {company.selectionStatus ? (
+            <View style={vS.statusBadge}>
+              <Text style={vS.statusBadgeText}>{company.selectionStatus}</Text>
+            </View>
+          ) : null}
+        </View>
+
+        {/* 基本情報 */}
+        <View style={vS.section}>
+          <Text style={vS.sectionTitle}>基本情報</Text>
+          <View style={vS.card}>
+            <ViewRow label="マイページURL" value={company.myPageUrl} isUrl />
+            <ViewRow label="ログインID" value={company.myPageLoginId} />
+          </View>
+        </View>
+
+        {/* グローバルカスタム項目 */}
+        {globalFields.length > 0 && (
+          <View style={vS.section}>
+            <Text style={vS.sectionTitle}>全社共通項目</Text>
+            <View style={vS.card}>
+              {globalFields.map((f, i) => (
+                <ViewRow
+                  key={f.id}
+                  label={f.label}
+                  value={company.globalFieldValues?.[f.id] ?? ''}
+                  last={i === globalFields.length - 1}
+                />
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* メモ */}
+        {company.memo ? (
+          <View style={vS.section}>
+            <Text style={vS.sectionTitle}>メモ</Text>
+            <View style={vS.card}>
+              <Text style={vS.memoText}>{company.memo}</Text>
+            </View>
+          </View>
+        ) : null}
+
+        {/* 未完了タスク */}
+        <View style={vS.section}>
+          <Text style={vS.sectionTitle}>未完了タスク（{pendingTasks.length}件）</Text>
+          {pendingTasks.length === 0 ? (
+            <Text style={vS.emptyText}>未完了のタスクはありません</Text>
+          ) : (
+            <View style={vS.card}>
+              {pendingTasks.map((t, i) => (
+                <ViewTask key={t.id} task={t} last={i === pendingTasks.length - 1} />
+              ))}
+            </View>
+          )}
+        </View>
+
+        {/* 完了済みタスク */}
+        {doneTasks.length > 0 && (
+          <View style={vS.section}>
+            <Text style={vS.sectionTitle}>完了済みタスク（{doneTasks.length}件）</Text>
+            <View style={vS.card}>
+              {doneTasks.map((t, i) => (
+                <ViewTask key={t.id} task={t} last={i === doneTasks.length - 1} done />
+              ))}
+            </View>
+          </View>
+        )}
+      </ScrollView>
+    </View>
+  );
+}
+
+function ViewRow({
+  label,
+  value,
+  isUrl,
+  last,
+}: {
+  label: string;
+  value: string;
+  isUrl?: boolean;
+  last?: boolean;
+}) {
+  return (
+    <View style={[vS.row, last && vS.rowLast]}>
+      <Text style={vS.rowLabel}>{label}</Text>
+      {isUrl && value ? (
+        <TouchableOpacity onPress={() => Linking.openURL(value)} hitSlop={{ top: 4, bottom: 4 }}>
+          <Text style={vS.rowValueLink} numberOfLines={1}>{value}</Text>
+        </TouchableOpacity>
+      ) : (
+        <Text style={vS.rowValue} numberOfLines={2}>{value || '—'}</Text>
+      )}
+    </View>
+  );
+}
+
+function ViewTask({ task, last, done }: { task: Task; last?: boolean; done?: boolean }) {
+  return (
+    <View style={[vS.taskRow, last && vS.rowLast]}>
+      <View style={[vS.taskDot, done && vS.taskDotDone]} />
+      <View style={vS.taskBody}>
+        <Text style={[vS.taskTitle, done && vS.taskTitleDone]}>{task.title || '（タイトル未設定）'}</Text>
+        {task.deadline ? (
+          <Text style={vS.taskMeta}>
+            {displayDate(task.deadline)}　{task.time || '23:59'}
+          </Text>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+const vS = StyleSheet.create({
+  root: { flex: 1, backgroundColor: C.bg },
+  navBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    backgroundColor: C.card,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+  },
+  backBtn: { paddingHorizontal: 4, paddingVertical: 4, minWidth: 56 },
+  backBtnText: { color: C.primary, fontSize: 17 },
+  navTitle: { flex: 1, textAlign: 'center', fontSize: 17, fontWeight: 'bold', color: C.text },
+  editBtn: {
+    backgroundColor: C.primary,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    minWidth: 56,
+    alignItems: 'center',
+  },
+  editBtnText: { color: '#FFF', fontSize: 14, fontWeight: 'bold' },
+  scroll: { flex: 1 },
+  content: { padding: 16, paddingBottom: 40 },
+  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  desireBadge: { borderRadius: 12, paddingHorizontal: 12, paddingVertical: 4 },
+  goalBadge: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
+  statusBadge: { backgroundColor: '#E8EEF6', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
+  badgeText: { color: '#FFF', fontSize: 13, fontWeight: 'bold' },
+  statusBadgeText: { color: C.primary, fontSize: 13, fontWeight: 'bold' },
+  section: { marginBottom: 20 },
+  sectionTitle: { fontSize: 13, fontWeight: 'bold', color: C.sub, marginBottom: 8 },
+  card: {
+    backgroundColor: C.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: C.border,
+    overflow: 'hidden',
+  },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+  },
+  rowLast: { borderBottomWidth: 0 },
+  rowLabel: { fontSize: 13, color: C.sub, flex: 1 },
+  rowValue: { fontSize: 14, color: C.text, flex: 2, textAlign: 'right' },
+  rowValueLink: { fontSize: 14, color: C.primary, textDecorationLine: 'underline', flex: 2, textAlign: 'right' },
+  memoText: { fontSize: 14, color: C.text, paddingHorizontal: 16, paddingVertical: 12, lineHeight: 22 },
+  emptyText: { fontSize: 13, color: C.muted, textAlign: 'center', paddingVertical: 8 },
+  taskRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+    gap: 12,
+  },
+  taskDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: C.primary, marginTop: 4 },
+  taskDotDone: { backgroundColor: C.muted },
+  taskBody: { flex: 1 },
+  taskTitle: { fontSize: 14, color: C.text, fontWeight: '500' },
+  taskTitleDone: { color: C.muted, textDecorationLine: 'line-through' },
+  taskMeta: { fontSize: 12, color: C.sub, marginTop: 2 },
+});
+
 // ─── CompanyListScreen ────────────────────────────────────────────────────────
 
 interface CompanyListScreenProps {
   companies: Company[];
   onSelect: (id: string) => void;
+  onEdit: (id: string) => void;
   onAdd: () => void;
 }
 
-function CompanyListScreen({ companies, onSelect, onAdd }: CompanyListScreenProps) {
+function CompanyListScreen({ companies, onSelect, onEdit, onAdd }: CompanyListScreenProps) {
   const [showFilter, setShowFilter] = useState(false);
   const [filter, setFilter] = useState<FilterState>(EMPTY_FILTER);
 
@@ -976,7 +1202,7 @@ function CompanyListScreen({ companies, onSelect, onAdd }: CompanyListScreenProp
         renderItem={({ item }) => {
           const pc = pendingCount(item);
           return (
-            <View style={lS.card}>
+            <TouchableOpacity style={lS.card} onPress={() => onSelect(item.id)} activeOpacity={0.75}>
               <View style={lS.cardTop}>
                 <TouchableOpacity
                   style={lS.cardNameWrap}
@@ -999,7 +1225,7 @@ function CompanyListScreen({ companies, onSelect, onAdd }: CompanyListScreenProp
                   ) : null}
                   <TouchableOpacity
                     style={lS.editBtn}
-                    onPress={() => onSelect(item.id)}
+                    onPress={() => onEdit(item.id)}
                     accessibilityLabel={`${item.name}を編集`}
                     accessibilityRole="button"
                   >
@@ -1024,7 +1250,7 @@ function CompanyListScreen({ companies, onSelect, onAdd }: CompanyListScreenProp
                   <Text style={lS.taskAlertText}>未完了タスク {pc} 件</Text>
                 </View>
               )}
-            </View>
+            </TouchableOpacity>
           );
         }}
       />
@@ -1506,6 +1732,7 @@ const dS = StyleSheet.create({
 
 type ViewState =
   | { mode: 'list' }
+  | { mode: 'view'; companyId: string }
   | { mode: 'detail'; companyId: string }
   | { mode: 'new'; draft: Company };
 
@@ -1596,6 +1823,19 @@ function JobManagementScreen() {
     }
   }, [uid, isDemo]);
 
+  if (view.mode === 'view') {
+    const company = companies.find(c => c.id === view.companyId);
+    if (!company) { setView({ mode: 'list' }); return null; }
+    return (
+      <CompanyViewScreen
+        company={company}
+        globalFields={globalFields}
+        onEdit={() => setView({ mode: 'detail', companyId: view.companyId })}
+        onBack={() => setView({ mode: 'list' })}
+      />
+    );
+  }
+
   if (view.mode === 'new') {
     return (
       <CompanyDetailScreen
@@ -1632,7 +1872,8 @@ function JobManagementScreen() {
   return (
     <CompanyListScreen
       companies={companies}
-      onSelect={id => setView({ mode: 'detail', companyId: id })}
+      onSelect={id => setView({ mode: 'view', companyId: id })}
+      onEdit={id => setView({ mode: 'detail', companyId: id })}
       onAdd={() => setView({ mode: 'new', draft: makeEmptyCompany() })}
     />
   );
