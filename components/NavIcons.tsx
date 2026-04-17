@@ -1,7 +1,7 @@
 import React from 'react';
 import { Text, View } from 'react-native';
 
-const EMOJIS: Record<string, string> = {
+const EMOJIS = {
   home: '🏠',
   job_management: '💼',
   consultation: '💬',
@@ -9,7 +9,7 @@ const EMOJIS: Record<string, string> = {
 };
 
 type Props = {
-  name: string;
+  name: keyof typeof EMOJIS;
   active: boolean;
   activeColor: string;
 };
@@ -18,7 +18,7 @@ export function NavTabIcon({ name, active, activeColor }: Props) {
   return (
     <View style={{ alignItems: 'center' }}>
       <Text style={{ fontSize: 24, opacity: active ? 1 : 0.35 }}>
-        {EMOJIS[name]}
+        {EMOJIS[name] ?? '❓'}
       </Text>
       <View style={{
         width: 5,
