@@ -8,35 +8,43 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { ChatIcon, HomeIcon, SettingsIcon, WorkIcon } from './components/NavIcons';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
 import HealthCareScreen from './screens/HealthCareScreen';
-import HealthMaintenanceScreen from './screens/HealthMaintenanceScreen';
 import JobManagementScreen from './screens/JobManagementScreen';
 import JobSupportScreen from './screens/JobSupportScreen';
-import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
+import SettingsScreen from './screens/SettingsScreen';
 
-type TabName = 'health_care' | 'health_maintenance' | 'job_management' | 'job_support';
+type TabName = 'health_care' | 'job_management' | 'job_support' | 'settings';
 type AuthScreen = 'login' | 'register' | 'forgot_password';
 
-const TABS: { name: TabName; label: string }[] = [
-  { name: 'health_care', label: '健康管理' },
-  { name: 'health_maintenance', label: '健康改善' },
-  { name: 'job_management', label: '就活管理' },
-  { name: 'job_support', label: '就活サポート' },
-];
+const ICON_SIZE = 28;
+const COLOR_ACTIVE = '#304E78';
+const COLOR_INACTIVE = '#A8BDD4';
+
+function TabIcon({ name, active }: { name: TabName; active: boolean }) {
+  const color = active ? COLOR_ACTIVE : COLOR_INACTIVE;
+  switch (name) {
+    case 'health_care':    return <HomeIcon color={color} size={ICON_SIZE} />;
+    case 'job_management': return <WorkIcon color={color} size={ICON_SIZE} />;
+    case 'job_support':    return <ChatIcon color={color} size={ICON_SIZE} />;
+    case 'settings':       return <SettingsIcon color={color} size={ICON_SIZE} />;
+    default:               return null;
+  }
+}
+
+const TABS: TabName[] = ['health_care', 'job_management', 'job_support', 'settings'];
 
 function renderScreen(tab: TabName) {
   switch (tab) {
-    case 'health_care':
-      return <HealthCareScreen />;
-    case 'health_maintenance':
-      return <HealthMaintenanceScreen />;
-    case 'job_management':
-      return <JobManagementScreen />;
-    case 'job_support':
-      return <JobSupportScreen />;
+    case 'health_care':    return <HealthCareScreen />;
+    case 'job_management': return <JobManagementScreen />;
+    case 'job_support':    return <JobSupportScreen />;
+    case 'settings':       return <SettingsScreen />;
+    default:              return null;
   }
 }
 
@@ -63,7 +71,7 @@ const demoBannerStyles = StyleSheet.create({
 });
 
 function AppContent() {
-  const { isAuthenticated, isLoading, isDemo, logout } = useAuth();
+  const { isAuthenticated, isLoading, isDemo } = useAuth();
   const [activeTab, setActiveTab] = useState<TabName>('health_care');
   const [authScreen, setAuthScreen] = useState<AuthScreen>('login');
 
@@ -104,23 +112,25 @@ function AppContent() {
       <View style={styles.tabBar}>
         {TABS.map(tab => (
           <TouchableOpacity
-            key={tab.name}
+            key={tab}
             style={styles.tabItem}
-            onPress={() => setActiveTab(tab.name)}
+            onPress={() => setActiveTab(tab)}
+            accessible={true}
+            accessibilityRole="tab"
+            accessibilityLabel={
+              tab === 'health_care'
+                ? 'ホーム'
+                : tab === 'job_management'
+                ? '求人管理'
+                : tab === 'job_support'
+                ? '就職支援'
+                : '設定'
+            }
+            accessibilityState={{ selected: activeTab === tab }}
           >
-            <Text
-              style={[
-                styles.tabLabel,
-                activeTab === tab.name && styles.tabLabelActive,
-              ]}
-            >
-              {tab.label}
-            </Text>
+            <TabIcon name={tab} active={activeTab === tab} />
           </TouchableOpacity>
         ))}
-        <TouchableOpacity style={styles.tabItem} onPress={logout}>
-          <Text style={styles.tabLabel}>ログアウト</Text>
-        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
@@ -139,7 +149,7 @@ function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#F2EBE4',
   },
   content: {
     flex: 1,
@@ -150,21 +160,13 @@ const styles = StyleSheet.create({
   tabBar: {
     flexDirection: 'row',
     borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-    backgroundColor: '#ffffff',
+    borderTopColor: '#D9D0C8',
+    backgroundColor: '#F2EBE4',
   },
   tabItem: {
     flex: 1,
     alignItems: 'center',
     paddingVertical: 12,
-  },
-  tabLabel: {
-    fontSize: 12,
-    color: '#999999',
-  },
-  tabLabelActive: {
-    color: '#000000',
-    fontWeight: 'bold',
   },
 });
 
