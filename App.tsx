@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import Icon from 'react-native-vector-icons/MaterialIcons';
+import { ChatIcon, HomeIcon, SettingsIcon, WorkIcon } from './components/NavIcons';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
 import HealthCareScreen from './screens/HealthCareScreen';
@@ -21,23 +21,30 @@ import SettingsScreen from './screens/SettingsScreen';
 type TabName = 'home' | 'job_management' | 'consultation' | 'settings';
 type AuthScreen = 'login' | 'register' | 'forgot_password';
 
-const TABS: { name: TabName; icon: string }[] = [
-  { name: 'home', icon: 'home' },
-  { name: 'job_management', icon: 'work' },
-  { name: 'consultation', icon: 'chat' },
-  { name: 'settings', icon: 'settings' },
-];
+const ICON_SIZE = 28;
+const COLOR_ACTIVE = '#304E78';
+const COLOR_INACTIVE = '#A8BDD4';
+
+function TabIcon({ name, active }: { name: TabName; active: boolean }) {
+  const color = active ? COLOR_ACTIVE : COLOR_INACTIVE;
+  switch (name) {
+    case 'home':          return <HomeIcon color={color} size={ICON_SIZE} />;
+    case 'job_management': return <WorkIcon color={color} size={ICON_SIZE} />;
+    case 'consultation':  return <ChatIcon color={color} size={ICON_SIZE} />;
+    case 'settings':      return <SettingsIcon color={color} size={ICON_SIZE} />;
+    default:              return null;
+  }
+}
+
+const TABS: TabName[] = ['home', 'job_management', 'consultation', 'settings'];
 
 function renderScreen(tab: TabName) {
   switch (tab) {
-    case 'home':
-      return <HealthCareScreen />;
-    case 'job_management':
-      return <JobManagementScreen />;
-    case 'consultation':
-      return <JobSupportScreen />;
-    case 'settings':
-      return <SettingsScreen />;
+    case 'home':          return <HealthCareScreen />;
+    case 'job_management': return <JobManagementScreen />;
+    case 'consultation':  return <JobSupportScreen />;
+    case 'settings':      return <SettingsScreen />;
+    default:              return null;
   }
 }
 
@@ -103,22 +110,15 @@ function AppContent() {
         {renderScreen(activeTab)}
       </View>
       <View style={styles.tabBar}>
-        {TABS.map(tab => {
-          const isActive = activeTab === tab.name;
-          return (
-            <TouchableOpacity
-              key={tab.name}
-              style={styles.tabItem}
-              onPress={() => setActiveTab(tab.name)}
-            >
-              <Icon
-                name={tab.icon}
-                size={28}
-                color={isActive ? '#304E78' : '#A8BDD4'}
-              />
-            </TouchableOpacity>
-          );
-        })}
+        {TABS.map(tab => (
+          <TouchableOpacity
+            key={tab}
+            style={styles.tabItem}
+            onPress={() => setActiveTab(tab)}
+          >
+            <TabIcon name={tab} active={activeTab === tab} />
+          </TouchableOpacity>
+        ))}
       </View>
     </SafeAreaView>
   );
@@ -137,7 +137,7 @@ function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#F2EBE4',
   },
   content: {
     flex: 1,
