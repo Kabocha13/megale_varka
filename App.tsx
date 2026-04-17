@@ -18,7 +18,7 @@ import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
 import SettingsScreen from './screens/SettingsScreen';
 
-type TabName = 'home' | 'job_management' | 'consultation' | 'settings';
+type TabName = 'health_care' | 'job_management' | 'job_support' | 'settings';
 type AuthScreen = 'login' | 'register' | 'forgot_password';
 
 const ICON_SIZE = 28;
@@ -28,22 +28,22 @@ const COLOR_INACTIVE = '#A8BDD4';
 function TabIcon({ name, active }: { name: TabName; active: boolean }) {
   const color = active ? COLOR_ACTIVE : COLOR_INACTIVE;
   switch (name) {
-    case 'home':           return <HomeIcon color={color} size={ICON_SIZE} />;
+    case 'health_care':    return <HomeIcon color={color} size={ICON_SIZE} />;
     case 'job_management': return <WorkIcon color={color} size={ICON_SIZE} />;
-    case 'consultation':   return <ChatIcon color={color} size={ICON_SIZE} />;
+    case 'job_support':    return <ChatIcon color={color} size={ICON_SIZE} />;
     case 'settings':       return <SettingsIcon color={color} size={ICON_SIZE} />;
     default:               return null;
   }
 }
 
-const TABS: TabName[] = ['home', 'job_management', 'consultation', 'settings'];
+const TABS: TabName[] = ['health_care', 'job_management', 'job_support', 'settings'];
 
 function renderScreen(tab: TabName) {
   switch (tab) {
-    case 'home':          return <HealthCareScreen />;
+    case 'health_care':    return <HealthCareScreen />;
     case 'job_management': return <JobManagementScreen />;
-    case 'consultation':  return <JobSupportScreen />;
-    case 'settings':      return <SettingsScreen />;
+    case 'job_support':    return <JobSupportScreen />;
+    case 'settings':       return <SettingsScreen />;
     default:              return null;
   }
 }
@@ -72,7 +72,7 @@ const demoBannerStyles = StyleSheet.create({
 
 function AppContent() {
   const { isAuthenticated, isLoading, isDemo } = useAuth();
-  const [activeTab, setActiveTab] = useState<TabName>('home');
+  const [activeTab, setActiveTab] = useState<TabName>('health_care');
   const [authScreen, setAuthScreen] = useState<AuthScreen>('login');
 
   if (isLoading) {
@@ -118,13 +118,13 @@ function AppContent() {
             accessible={true}
             accessibilityRole="tab"
             accessibilityLabel={
-              tab === 'home'
-                ? 'Home'
+              tab === 'health_care'
+                ? 'ホーム'
                 : tab === 'job_management'
-                ? 'Job management'
-                : tab === 'consultation'
-                ? 'Consultation'
-                : 'Settings'
+                ? '求人管理'
+                : tab === 'job_support'
+                ? '就職支援'
+                : '設定'
             }
             accessibilityState={{ selected: activeTab === tab }}
           >
