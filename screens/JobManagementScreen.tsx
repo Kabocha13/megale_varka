@@ -386,8 +386,10 @@ const gfS = StyleSheet.create({
 // ─── Date/Time helpers ───────────────────────────────────────────────────────
 
 function parseDate(s: string): Date {
+  if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date();
   const [y, m, d] = s.split('-').map(Number);
-  return new Date(y, m - 1, d);
+  const date = new Date(y, m - 1, d);
+  return isNaN(date.getTime()) ? new Date() : date;
 }
 function formatDate(d: Date): string {
   const y = d.getFullYear();
@@ -396,6 +398,7 @@ function formatDate(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 function displayDate(s: string): string {
+  if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return s || '';
   const [y, m, d] = s.split('-').map(Number);
   return `${y}年${m}月${d}日`;
 }
@@ -424,7 +427,12 @@ function PickerFieldModal({
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onDone}>
       <View style={pfS.overlay}>
         <View style={pfS.sheet}>
-          <TouchableOpacity style={pfS.doneRow} onPress={onDone}>
+          <TouchableOpacity
+            style={pfS.doneRow}
+            onPress={onDone}
+            accessibilityRole="button"
+            accessibilityLabel="日付/時刻選択を完了"
+          >
             <Text style={pfS.doneText}>完了</Text>
           </TouchableOpacity>
           {children}
@@ -451,7 +459,9 @@ function DatePickerField({
   onChange: (v: string) => void;
 }) {
   const [show, setShow] = useState(false);
-  const date = value ? parseDate(value) : new Date();
+  const today = new Date();
+  const parsed = value ? parseDate(value) : today;
+  const date = parsed.getTime() < today.getTime() ? today : parsed;
 
   const handleChange = (_: DateTimePickerEvent, selected?: Date) => {
     if (Platform.OS === 'android') setShow(false);
@@ -460,7 +470,12 @@ function DatePickerField({
 
   return (
     <>
-      <TouchableOpacity style={pfS2.btn} onPress={() => setShow(true)}>
+      <TouchableOpacity
+        style={pfS2.btn}
+        onPress={() => setShow(true)}
+        accessibilityRole="button"
+        accessibilityLabel="期限（日付）を選択"
+      >
         <Text style={value ? pfS2.btnText : pfS2.btnPlaceholder}>
           {value ? displayDate(value) : '日付を選択'}
         </Text>
@@ -505,7 +520,13 @@ function TimePickerField({
 
   return (
     <>
-      <TouchableOpacity style={pfS2.btn} onPress={() => setShow(true)}>
+      <TouchableOpacity
+        style={pfS2.btn}
+        onPress={() => setShow(true)}
+        accessibilityRole="button"
+        accessibilityLabel="期限（時刻）を選択"
+        accessibilityValue={{ text: value || '23:59' }}
+      >
         <Text style={pfS2.btnText}>{value || '23:59'}</Text>
         <Text style={pfS2.icon}>🕐</Text>
       </TouchableOpacity>
