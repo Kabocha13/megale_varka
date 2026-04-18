@@ -43,20 +43,17 @@ export async function hasRequestedHealthKit(): Promise<boolean> {
   return val === 'true';
 }
 
-export type HKRequestResult = 'granted' | 'unavailable';
+export type HKRequestResult = { ok: true } | { ok: false; reason: string };
 
 // Shows the HealthKit permission dialog (call only when user explicitly requests)
 export async function requestHealthKitPermissions(): Promise<HKRequestResult> {
-  if (!isHealthKitAvailable()) { return 'unavailable'; }
+  if (!isHealthKitAvailable()) { return { ok: false, reason: 'platform not iOS' }; }
   try {
     await initHealthKit();
     await AsyncStorage.setItem(HK_ASKED_KEY, 'true');
-    return 'granted';
-  } catch {
-    // initHealthKit throws only when HealthKit itself is unavailable
-    // (iOS Simulator, MDM-restricted device, etc.)
-    // User denying the permission dialog does NOT cause an error.
-    return 'unavailable';
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: String(e) };
   }
 }
 

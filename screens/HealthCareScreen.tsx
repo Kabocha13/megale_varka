@@ -183,12 +183,8 @@ export default function HealthCareScreen() {
 
   const handleConnectHealthKit = async () => {
     const result: HKRequestResult = await requestHealthKitPermissions();
-    if (result === 'unavailable') {
-      Alert.alert(
-        'ヘルスケアが利用できません',
-        'シミュレーターまたは制限されたデバイスでは使用できません。実機でお試しください。',
-        [{ text: 'OK' }],
-      );
+    if (!result.ok) {
+      Alert.alert('HealthKit エラー', result.reason, [{ text: 'OK' }]);
       return;
     }
     try {
