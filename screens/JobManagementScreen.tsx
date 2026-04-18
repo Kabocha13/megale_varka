@@ -158,7 +158,7 @@ function PickerModal({ visible, title, options, value, onSelect, onClose }: Pick
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <TouchableOpacity style={pmS.overlay} activeOpacity={1} onPress={onClose}>
-        <View style={pmS.sheet}>
+        <TouchableOpacity activeOpacity={1} onPress={() => {}} style={pmS.sheet}>
           <Text style={pmS.title}>{title}</Text>
           <ScrollView style={pmS.optionList} bounces={false}>
             {options.map(opt => (
@@ -177,7 +177,7 @@ function PickerModal({ visible, title, options, value, onSelect, onClose }: Pick
           <TouchableOpacity style={pmS.cancel} onPress={onClose}>
             <Text style={pmS.cancelText}>キャンセル</Text>
           </TouchableOpacity>
-        </View>
+        </TouchableOpacity>
       </TouchableOpacity>
     </Modal>
   );
@@ -1778,29 +1778,6 @@ function JobManagementScreen() {
   const [globalFields, setGlobalFields] = useState<GlobalField[]>([]);
   const [view, setView] = useState<ViewState>({ mode: 'list' });
 
-  // 初期データ読み込み・通知権限リクエスト
-  useEffect(() => {
-    requestNotificationPermission().catch(() => {});
-    if (!uid) return;
-    if (isDemo) {
-      Promise.all([
-        AsyncStorage.getItem(STORAGE_KEY),
-        AsyncStorage.getItem(GLOBAL_FIELDS_KEY),
-      ]).then(([cJson, fJson]) => {
-        if (cJson) setCompanies(JSON.parse(cJson));
-        if (fJson) setGlobalFields(JSON.parse(fJson));
-      }).catch(() => {});
-    } else {
-      Promise.all([
-        getDocs(collection(db, 'users', uid, 'job_companies')),
-        getDoc(doc(db, 'users', uid, 'job_settings', 'global_fields')),
-      ]).then(([snap, fSnap]) => {
-        setCompanies(snap.docs.map(d => d.data() as Company));
-        if (fSnap.exists()) setGlobalFields(fSnap.data().fields ?? []);
-      }).catch(() => {});
-    }
-  }, [uid, isDemo]);
-
   // タスク通知をスケジュール
   const syncNotifications = useCallback((company: Company) => {
     getReminderDays().then(reminderDays => {
@@ -1820,6 +1797,38 @@ function JobManagementScreen() {
       });
     }).catch(() => {});
   }, []);
+
+  // 初期データ読み込み・通知権限リクエスト
+  useEffect(() => {
+    requestNotificationPermission().catch(() => {});
+    if (!uid) return;
+    if (isDemo) {
+      Promise.all([
+        AsyncStorage.getItem(STORAGE_KEY),
+        AsyncStorage.getItem(GLOBAL_FIELDS_KEY),
+      ]).then(([cJson, fJson]) => {
+        const loaded: Company[] = cJson ? JSON.parse(cJson) : [];
+        if (loaded.length) setCompanies(loaded);
+        if (fJson) setGlobalFields(JSON.parse(fJson));
+        // Re-sync all notifications in case reminder days changed in Settings
+        loaded.forEach(c => syncNotifications(c));
+      }).catch(() => {});
+    } else {
+      Promise.all([
+        getDocs(collection(db, 'users', uid, 'job_companies')),
+        getDoc(doc(db, 'users', uid, 'job_settings', 'global_fields')),
+      ]).then(([snap, fSnap]) => {
+        const loaded = snap.docs.map(d => {
+          const data = d.data() as Company;
+          return { ...data, id: data.id ?? d.id };
+        });
+        setCompanies(loaded);
+        if (fSnap.exists()) setGlobalFields(fSnap.data().fields ?? []);
+        // Re-sync all notifications in case reminder days changed in Settings
+        loaded.forEach(c => syncNotifications(c));
+      }).catch(() => {});
+    }
+  }, [uid, isDemo, syncNotifications]);
 
   // 企業を保存（追加・更新）
   const saveCompany = useCallback((company: Company) => {
@@ -1859,9 +1868,20 @@ function JobManagementScreen() {
     }
   }, [uid, isDemo]);
 
+  // viewモード・detailモードでcompanyが見つからない場合はリストに戻る
+  useEffect(() => {
+    if (
+      (view.mode === 'view' || view.mode === 'detail') &&
+      companies.length > 0 &&
+      !companies.find(c => c.id === view.companyId)
+    ) {
+      setView({ mode: 'list' });
+    }
+  }, [view, companies]);
+
   if (view.mode === 'view') {
     const company = companies.find(c => c.id === view.companyId);
-    if (!company) { setView({ mode: 'list' }); return null; }
+    if (!company) return null;
     return (
       <CompanyViewScreen
         company={company}
@@ -1895,10 +1915,7 @@ function JobManagementScreen() {
 
   if (view.mode === 'detail') {
     const company = companies.find(c => c.id === view.companyId);
-    if (!company) {
-      setView({ mode: 'list' });
-      return null;
-    }
+    if (!company) return null;
     return (
       <CompanyDetailScreen
         company={company}
