@@ -186,15 +186,7 @@ export default function HealthCareScreen() {
     if (result === 'unavailable') {
       Alert.alert(
         'ヘルスケアが利用できません',
-        'このデバイスではヘルスケアに対応していません。実機でお試しください。',
-        [{ text: 'OK' }],
-      );
-      return;
-    }
-    if (result === 'denied') {
-      Alert.alert(
-        '連携できませんでした',
-        'ヘルスケアの権限を確認してください。\n設定 › プライバシーとセキュリティ › ヘルスケア',
+        'シミュレーターまたは制限されたデバイスでは使用できません。実機でお試しください。',
         [{ text: 'OK' }],
       );
       return;
