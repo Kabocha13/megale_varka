@@ -20,6 +20,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { db } from '../firebase/config';
 import {
+  HKRequestResult,
   fetchTodayHealthKitData,
   isHealthKitAvailable,
   requestHealthKitPermissions,
@@ -181,8 +182,16 @@ export default function HealthCareScreen() {
   }, []);
 
   const handleConnectHealthKit = async () => {
-    const granted = await requestHealthKitPermissions();
-    if (!granted) {
+    const result: HKRequestResult = await requestHealthKitPermissions();
+    if (result === 'unavailable') {
+      Alert.alert(
+        'ヘルスケアが利用できません',
+        'このデバイスではヘルスケアに対応していません。実機でお試しください。',
+        [{ text: 'OK' }],
+      );
+      return;
+    }
+    if (result === 'denied') {
       Alert.alert(
         '連携できませんでした',
         'ヘルスケアの権限を確認してください。\n設定 › プライバシーとセキュリティ › ヘルスケア',
