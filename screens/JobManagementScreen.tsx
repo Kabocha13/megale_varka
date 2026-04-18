@@ -136,7 +136,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 function toStringRecord(value: Record<string, unknown>): Record<string, string> {
   const result: Record<string, string> = {};
   for (const key of Object.keys(value)) {
-    if (typeof value[key] === 'string') result[key] = value[key] as string;
+    if (typeof value[key] === 'string') result[key] = value[key];
   }
   return result;
 }
