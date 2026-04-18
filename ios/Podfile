@@ -16,7 +16,7 @@ end
 
 target 'megale_varka' do
   config = use_native_modules!
-  pod 'RNAppleHealthKit', :path => '../node_modules/react-native-health'
+  pod 'RNAppleHealthKit', :path => '../node_modules/react-native-health', :inhibit_warnings => true
 
   use_react_native!(
     :path => config[:reactNativePath],
