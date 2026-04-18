@@ -133,6 +133,14 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function toStringRecord(value: Record<string, unknown>): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const key of Object.keys(value)) {
+    if (typeof value[key] === 'string') result[key] = value[key] as string;
+  }
+  return result;
+}
+
 function makeEmptyCompany(): Company {
   return {
     id: uid(),
@@ -395,6 +403,12 @@ const gfS = StyleSheet.create({
 function normalizeUrl(url: string): string {
   if (!url) return url;
   return /^https?:\/\//i.test(url) ? url : `https://${url}`;
+}
+
+function openUrl(url: string): void {
+  Linking.openURL(normalizeUrl(url)).catch(() => {
+    Alert.alert('リンクを開けませんでした', 'URLを確認して再度お試しください。');
+  });
 }
 
 function parseDate(s: string): Date {
@@ -1043,11 +1057,7 @@ function ViewRow({
       <Text style={vS.rowLabel}>{label}</Text>
       {isUrl && value ? (
         <TouchableOpacity
-          onPress={() => {
-            Linking.openURL(normalizeUrl(value)).catch(() => {
-              Alert.alert('リンクを開けませんでした', 'URLを確認して再度お試しください。');
-            });
-          }}
+          onPress={() => openUrl(value)}
           hitSlop={{ top: 4, bottom: 4 }}
         >
           <Text style={vS.rowValueLink} numberOfLines={1}>{value}</Text>
@@ -1258,10 +1268,7 @@ function CompanyListScreen({ companies, onSelect, onEdit, onAdd }: CompanyListSc
                   style={lS.cardNameWrap}
                   onPress={() => {
                     if (!item.myPageUrl) return;
-                    const url = normalizeUrl(item.myPageUrl);
-                    Linking.openURL(url).catch(() => {
-                      Alert.alert('エラー', 'URLを開けませんでした');
-                    });
+                    openUrl(item.myPageUrl);
                   }}
                   disabled={!item.myPageUrl}
                   hitSlop={{ top: 4, bottom: 4 }}
@@ -1835,7 +1842,7 @@ function JobManagementScreen() {
           if (!Array.isArray(loaded)) loaded = [];
         } catch {
           loaded = [];
-          AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
+          AsyncStorage.removeItem(STORAGE_KEY).catch(err => console.warn('Failed to remove corrupt storage:', err));
         }
         let fields: GlobalField[] = [];
         try {
@@ -1843,7 +1850,7 @@ function JobManagementScreen() {
           if (!Array.isArray(fields)) fields = [];
         } catch {
           fields = [];
-          AsyncStorage.removeItem(GLOBAL_FIELDS_KEY).catch(() => {});
+          AsyncStorage.removeItem(GLOBAL_FIELDS_KEY).catch(err => console.warn('Failed to remove corrupt storage:', err));
         }
         if (loaded.length) setCompanies(loaded);
         if (fields.length) setGlobalFields(fields);
@@ -1866,7 +1873,7 @@ function JobManagementScreen() {
             selectionStatus: data.selectionStatus ?? '',
             desireLevel: data.desireLevel ?? '',
             tasks: Array.isArray(data.tasks) ? data.tasks : [],
-            globalFieldValues: isPlainObject(data.globalFieldValues) ? data.globalFieldValues as Record<string, string> : {},
+            globalFieldValues: isPlainObject(data.globalFieldValues) ? toStringRecord(data.globalFieldValues) : {},
             memo: data.memo ?? '',
           } as Company;
         });
