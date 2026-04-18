@@ -34,5 +34,16 @@ target 'megale_varka' do
       :mac_catalyst_enabled => false,
       # :ccache_enabled => true
     )
+    installer.pods_project.targets.each do |target|
+      next unless target.name == 'RNAppleHealthKit'
+      target.build_configurations.each do |cfg|
+        flags = cfg.build_settings['OTHER_CFLAGS'] || '$(inherited)'
+        if flags.is_a?(Array)
+          cfg.build_settings['OTHER_CFLAGS'] = flags.reject { |f| f.include?('RCT_REMOVE_LEGACY_ARCH') }
+        elsif flags.is_a?(String)
+          cfg.build_settings['OTHER_CFLAGS'] = flags.gsub('-DRCT_REMOVE_LEGACY_ARCH=1', '').strip
+        end
+      end
+    end
   end
 end
