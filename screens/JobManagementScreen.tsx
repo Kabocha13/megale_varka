@@ -145,6 +145,8 @@ function makeEmptyCompany(): Company {
 
 // ─── PickerModal ──────────────────────────────────────────────────────────────
 
+const noop = () => {};
+
 interface PickerModalProps {
   visible: boolean;
   title: string;
@@ -158,7 +160,7 @@ function PickerModal({ visible, title, options, value, onSelect, onClose }: Pick
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <TouchableOpacity style={pmS.overlay} activeOpacity={1} onPress={onClose}>
-        <TouchableOpacity activeOpacity={1} onPress={() => {}} style={pmS.sheet}>
+        <TouchableOpacity activeOpacity={1} onPress={noop} style={pmS.sheet}>
           <Text style={pmS.title}>{title}</Text>
           <ScrollView style={pmS.optionList} bounces={false}>
             {options.map(opt => (
@@ -1777,6 +1779,8 @@ function JobManagementScreen() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [globalFields, setGlobalFields] = useState<GlobalField[]>([]);
   const [view, setView] = useState<ViewState>({ mode: 'list' });
+  const viewRef = useRef(view);
+  viewRef.current = view;
 
   // タスク通知をスケジュール
   const syncNotifications = useCallback((company: Company) => {
@@ -1870,14 +1874,15 @@ function JobManagementScreen() {
 
   // viewモード・detailモードでcompanyが見つからない場合はリストに戻る
   useEffect(() => {
+    const currentView = viewRef.current;
     if (
-      (view.mode === 'view' || view.mode === 'detail') &&
+      (currentView.mode === 'view' || currentView.mode === 'detail') &&
       companies.length > 0 &&
-      !companies.find(c => c.id === view.companyId)
+      !companies.find(c => c.id === currentView.companyId)
     ) {
       setView({ mode: 'list' });
     }
-  }, [view, companies]);
+  }, [companies]);
 
   if (view.mode === 'view') {
     const company = companies.find(c => c.id === view.companyId);
