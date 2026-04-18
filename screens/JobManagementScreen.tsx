@@ -914,9 +914,10 @@ interface CompanyViewScreenProps {
   globalFields: GlobalField[];
   onEdit: () => void;
   onBack: () => void;
+  onToggleTask: (taskId: string, completed: boolean) => void;
 }
 
-function CompanyViewScreen({ company, globalFields, onEdit, onBack }: CompanyViewScreenProps) {
+function CompanyViewScreen({ company, globalFields, onEdit, onBack, onToggleTask }: CompanyViewScreenProps) {
   const pendingTasks = company.tasks.filter(t => !t.completed);
   const doneTasks = company.tasks.filter(t => t.completed);
 
@@ -997,7 +998,7 @@ function CompanyViewScreen({ company, globalFields, onEdit, onBack }: CompanyVie
           ) : (
             <View style={vS.card}>
               {pendingTasks.map((t, i) => (
-                <ViewTask key={t.id} task={t} last={i === pendingTasks.length - 1} />
+                <ViewTask key={t.id} task={t} last={i === pendingTasks.length - 1} onToggle={() => onToggleTask(t.id, true)} />
               ))}
             </View>
           )}
@@ -1009,7 +1010,7 @@ function CompanyViewScreen({ company, globalFields, onEdit, onBack }: CompanyVie
             <Text style={vS.sectionTitle}>完了済みタスク（{doneTasks.length}件）</Text>
             <View style={vS.card}>
               {doneTasks.map((t, i) => (
-                <ViewTask key={t.id} task={t} last={i === doneTasks.length - 1} done />
+                <ViewTask key={t.id} task={t} last={i === doneTasks.length - 1} done onToggle={() => onToggleTask(t.id, false)} />
               ))}
             </View>
           </View>
@@ -1044,10 +1045,28 @@ function ViewRow({
   );
 }
 
-function ViewTask({ task, last, done }: { task: Task; last?: boolean; done?: boolean }) {
+function ViewTask({
+  task,
+  last,
+  done,
+  onToggle,
+}: {
+  task: Task;
+  last?: boolean;
+  done?: boolean;
+  onToggle: () => void;
+}) {
   return (
     <View style={[vS.taskRow, last && vS.rowLast]}>
-      <View style={[vS.taskDot, done && vS.taskDotDone]} />
+      <TouchableOpacity
+        style={[vS.checkbox, done && vS.checkboxDone]}
+        onPress={onToggle}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: !!done }}
+        accessibilityLabel={done ? 'タスクを未完了に戻す' : 'タスクを完了にする'}
+      >
+        {done && <Text style={vS.checkmark}>✓</Text>}
+      </TouchableOpacity>
       <View style={vS.taskBody}>
         <Text style={[vS.taskTitle, done && vS.taskTitleDone]}>{task.title || '（タイトル未設定）'}</Text>
         {task.deadline ? (
@@ -1126,6 +1145,18 @@ const vS = StyleSheet.create({
   },
   taskDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: C.primary, marginTop: 4 },
   taskDotDone: { backgroundColor: C.muted },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: C.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  checkboxDone: { backgroundColor: C.success, borderColor: C.success },
+  checkmark: { color: '#FFF', fontSize: 14, fontWeight: 'bold' },
   taskBody: { flex: 1 },
   taskTitle: { fontSize: 14, color: C.text, fontWeight: '500' },
   taskTitleDone: { color: C.muted, textDecorationLine: 'line-through' },
@@ -1837,6 +1868,13 @@ function JobManagementScreen() {
         globalFields={globalFields}
         onEdit={() => setView({ mode: 'detail', companyId: view.companyId })}
         onBack={() => setView({ mode: 'list' })}
+        onToggleTask={(taskId, completed) => {
+          const updated = {
+            ...company,
+            tasks: company.tasks.map(t => t.id === taskId ? { ...t, completed } : t),
+          };
+          saveCompany(updated);
+        }}
       />
     );
   }
