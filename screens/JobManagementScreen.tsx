@@ -129,6 +129,10 @@ function uid(): string {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 function makeEmptyCompany(): Company {
   return {
     id: uid(),
@@ -1862,7 +1866,7 @@ function JobManagementScreen() {
             selectionStatus: data.selectionStatus ?? '',
             desireLevel: data.desireLevel ?? '',
             tasks: Array.isArray(data.tasks) ? data.tasks : [],
-            globalFieldValues: data.globalFieldValues && typeof data.globalFieldValues === 'object' && !Array.isArray(data.globalFieldValues) ? data.globalFieldValues : {},
+            globalFieldValues: isPlainObject(data.globalFieldValues) ? data.globalFieldValues as Record<string, string> : {},
             memo: data.memo ?? '',
           } as Company;
         });

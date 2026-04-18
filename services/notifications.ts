@@ -85,7 +85,7 @@ export async function scheduleTaskNotification(
   const parts = deadline.split('-').map(Number);
   if (parts.length !== 3 || parts.some(isNaN)) return;
   const [year, month, day] = parts;
-  const rawTime = /^\d{1,2}:\d{2}$/.test(time ?? '') ? time : '23:59';
+  const rawTime = /^([01]?\d|2[0-3]):[0-5]\d$/.test(time ?? '') ? time : '23:59';
   const [h, m] = rawTime.split(':').map(Number);
   if (!Number.isFinite(h) || !Number.isFinite(m)) return;
 
