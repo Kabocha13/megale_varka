@@ -22,6 +22,7 @@ import { db } from '../firebase/config';
 import {
   fetchTodayHealthKitData,
   isHealthKitAvailable,
+  requestHealthKitPermissions,
 } from '../services/healthService';
 
 // --- Types ---
@@ -179,12 +180,30 @@ export default function HealthCareScreen() {
     );
   }, []);
 
-  const handleConnectHealthKit = () => {
-    Alert.alert(
-      'ヘルスケア連携',
-      'iPhoneのヘルスケアアプリと連携して、歩数や消費カロリーを自動で記録できます。\n\n※ この機能は近日公開予定です。',
-      [{ text: 'OK' }],
-    );
+  const handleConnectHealthKit = async () => {
+    const granted = await requestHealthKitPermissions();
+    if (!granted) {
+      Alert.alert(
+        '連携できませんでした',
+        'ヘルスケアの権限を確認してください。\n設定 › プライバシーとセキュリティ › ヘルスケア',
+        [{ text: 'OK' }],
+      );
+      return;
+    }
+    try {
+      const hk = await fetchTodayHealthKitData();
+      setSteps(hk.steps);
+      setActiveCalories(hk.activeCalories);
+      if (hk.sleepHours !== null) {
+        const wake = new Date();
+        const bed = new Date(wake.getTime() - hk.sleepHours * 3_600_000);
+        setBedTime(bed);
+        setWakeTime(wake);
+        setSleepSource('healthkit');
+      }
+    } catch (_) {
+      // silently ignore fetch errors after connect
+    }
   };
 
   const handleSave = async () => {
