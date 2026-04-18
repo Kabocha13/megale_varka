@@ -33,6 +33,10 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSHealthShareUsageDescription</key>
+	<string>睡眠・歩数・消費カロリーを健康記録に活用します。</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>健康データへの書き込みは行いません。</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string></string>
 	<key>RCTNewArchEnabled</key>
