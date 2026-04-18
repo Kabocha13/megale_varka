@@ -1,3 +1,4 @@
+import DateTimePicker from '@react-native-community/datetimepicker';
 import {
   doc,
   getDoc,
@@ -8,6 +9,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -23,41 +26,35 @@ import {
 
 // --- Types ---
 type Mood = 1 | 2 | 3 | 4 | 5;
-type AppetiteLevel =
-  | '普通に食べられる'
-  | '少し食欲がない'
-  | 'あまり食べられない'
-  | '水なら飲める'
-  | '何も摂れない';
+type AppetiteValue = 'full' | 'normal' | 'selective' | 'light' | 'water' | 'nothing';
 
 // --- Constants ---
+// Left=悪い, right=良い
 const MOODS: { value: Mood; emoji: string; label: string }[] = [
-  { value: 5, emoji: '😊', label: 'とても良い' },
-  { value: 4, emoji: '🙂', label: '良い' },
-  { value: 3, emoji: '😐', label: '普通' },
-  { value: 2, emoji: '😕', label: '悪い' },
   { value: 1, emoji: '😞', label: 'とても悪い' },
+  { value: 2, emoji: '😕', label: '悪い' },
+  { value: 3, emoji: '😐', label: '普通' },
+  { value: 4, emoji: '🙂', label: '良い' },
+  { value: 5, emoji: '😊', label: 'とても良い' },
 ];
 
 const SYMPTOMS = [
   '気分の落ち込み',
   'やる気が出ない',
-  '集中できない',
-  '疲れやすい',
   '不安・焦り感',
-  '頭痛・頭重感',
-  '体が重い',
-  '涙が出る',
+  '体の重さ・疲れ',
+  '集中できない',
   '孤独感',
-  '何もしたくない',
+  'その他',
 ];
 
-const APPETITE_LEVELS: AppetiteLevel[] = [
-  '普通に食べられる',
-  '少し食欲がない',
-  'あまり食べられない',
-  '水なら飲める',
-  '何も摂れない',
+const APPETITE_OPTIONS: { value: AppetiteValue; label: string }[] = [
+  { value: 'full',      label: '全力全開！何でもいける 🍛' },
+  { value: 'normal',    label: '普通に食べられる' },
+  { value: 'selective', label: '好きなものならいける 🍰' },
+  { value: 'light',     label: 'お粥・うどんなら... 🍜' },
+  { value: 'water',     label: '水・お茶ならいける 💧' },
+  { value: 'nothing',   label: '胃も休業中 🙅' },
 ];
 
 // --- Helpers ---
@@ -66,17 +63,48 @@ function todayString(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function formatDate(dateStr: string): string {
-  const [y, m, day] = dateStr.split('-');
-  return `${y}年${parseInt(m, 10)}月${parseInt(day, 10)}日`;
+function formatDate(s: string): string {
+  const [y, m, d] = s.split('-');
+  return `${y}年${parseInt(m, 10)}月${parseInt(d, 10)}日`;
 }
 
-function formatSleep(hours: number): string {
+function formatTime(d: Date): string {
+  return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+function timeToStr(d: Date): string {
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+function strToDate(hhmm: string): Date {
+  const [h, m] = hhmm.split(':').map(Number);
+  const d = new Date();
+  d.setHours(h, m, 0, 0);
+  return d;
+}
+
+function calcSleepHours(bed: Date, wake: Date): number {
+  let ms = wake.getTime() - bed.getTime();
+  if (ms < 0) { ms += 24 * 60 * 60 * 1000; } // cross midnight
+  return ms / (1000 * 60 * 60);
+}
+
+function formatDuration(hours: number): string {
   const h = Math.floor(hours);
-  const half = hours % 1 !== 0;
-  if (h === 0 && half) { return '30分'; }
-  if (half) { return `${h}時間30分`; }
-  return `${h}時間`;
+  const m = Math.round((hours - h) * 60);
+  return m === 0 ? `${h}時間` : `${h}時間${m}分`;
+}
+
+function mkBedTime(): Date {
+  const d = new Date();
+  d.setHours(23, 0, 0, 0);
+  return d;
+}
+
+function mkWakeTime(): Date {
+  const d = new Date();
+  d.setHours(7, 0, 0, 0);
+  return d;
 }
 
 // --- Component ---
@@ -91,12 +119,14 @@ export default function HealthCareScreen() {
 
   const [mood, setMood] = useState<Mood | null>(null);
   const [symptoms, setSymptoms] = useState<string[]>([]);
-  const [appetite, setAppetite] = useState<AppetiteLevel | null>(null);
+  const [appetite, setAppetite] = useState<AppetiteValue | null>(null);
   const [alcohol, setAlcohol] = useState(false);
-  const [sleepHours, setSleepHours] = useState(7);
+  const [bedTime, setBedTime] = useState<Date>(mkBedTime);
+  const [wakeTime, setWakeTime] = useState<Date>(mkWakeTime);
   const [sleepSource, setSleepSource] = useState<'manual' | 'healthkit'>('manual');
   const [steps, setSteps] = useState<number | null>(null);
   const [activeCalories, setActiveCalories] = useState<number | null>(null);
+  const [showTimePicker, setShowTimePicker] = useState<'bed' | 'wake' | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -107,7 +137,10 @@ export default function HealthCareScreen() {
           const hk = await fetchTodayHealthKitData();
           if (!cancelled) {
             if (hk.sleepHours !== null) {
-              setSleepHours(hk.sleepHours);
+              const wake = new Date();
+              const bed = new Date(wake.getTime() - hk.sleepHours * 3600000);
+              setBedTime(bed);
+              setWakeTime(wake);
               setSleepSource('healthkit');
             }
             setSteps(hk.steps);
@@ -117,20 +150,21 @@ export default function HealthCareScreen() {
         if (uid) {
           const snap = await getDoc(doc(db, 'users', uid, 'healthRecords', today));
           if (!cancelled && snap.exists()) {
-            const d = snap.data();
+            const data = snap.data();
             setAlreadySaved(true);
-            if (d.mood) { setMood(d.mood as Mood); }
-            if (d.symptoms) { setSymptoms(d.symptoms); }
-            if (d.appetite) { setAppetite(d.appetite as AppetiteLevel); }
-            setAlcohol(d.alcohol ?? false);
-            if (d.sleepHours !== undefined) { setSleepHours(d.sleepHours); }
-            if (d.sleepSource) { setSleepSource(d.sleepSource); }
-            if (d.steps !== undefined) { setSteps(d.steps); }
-            if (d.activeCalories !== undefined) { setActiveCalories(d.activeCalories); }
+            if (data.mood) { setMood(data.mood as Mood); }
+            if (data.symptoms) { setSymptoms(data.symptoms); }
+            if (data.appetite) { setAppetite(data.appetite as AppetiteValue); }
+            setAlcohol(data.alcohol ?? false);
+            if (data.bedTime) { setBedTime(strToDate(data.bedTime)); }
+            if (data.wakeTime) { setWakeTime(strToDate(data.wakeTime)); }
+            if (data.sleepSource) { setSleepSource(data.sleepSource); }
+            if (data.steps !== undefined) { setSteps(data.steps); }
+            if (data.activeCalories !== undefined) { setActiveCalories(data.activeCalories); }
           }
         }
       } catch (_) {
-        // ignore load errors silently
+        // silently ignore load errors
       } finally {
         if (!cancelled) { setLoading(false); }
       }
@@ -145,13 +179,13 @@ export default function HealthCareScreen() {
     );
   }, []);
 
-  const adjustSleep = useCallback((delta: number) => {
-    setSleepHours(prev => {
-      const next = Math.round((prev + delta) * 2) / 2;
-      return Math.max(0, Math.min(12, next));
-    });
-    setSleepSource('manual');
-  }, []);
+  const handleConnectHealthKit = () => {
+    Alert.alert(
+      'ヘルスケア連携',
+      'iPhoneのヘルスケアアプリと連携して、歩数や消費カロリーを自動で記録できます。\n\n※ この機能は近日公開予定です。',
+      [{ text: 'OK' }],
+    );
+  };
 
   const handleSave = async () => {
     if (!uid) { return; }
@@ -160,6 +194,7 @@ export default function HealthCareScreen() {
       return;
     }
     setSaving(true);
+    const sleepHours = calcSleepHours(bedTime, wakeTime);
     try {
       await setDoc(doc(db, 'users', uid, 'healthRecords', today), {
         date: today,
@@ -167,6 +202,8 @@ export default function HealthCareScreen() {
         symptoms,
         appetite,
         alcohol,
+        bedTime: timeToStr(bedTime),
+        wakeTime: timeToStr(wakeTime),
         sleepHours,
         sleepSource,
         steps,
@@ -181,6 +218,8 @@ export default function HealthCareScreen() {
       setSaving(false);
     }
   };
+
+  const sleepDuration = calcSleepHours(bedTime, wakeTime);
 
   if (loading) {
     return (
@@ -201,7 +240,7 @@ export default function HealthCareScreen() {
         </View>
       </View>
 
-      {/* Mood */}
+      {/* Mood — left=悪い, right=良い */}
       <Text style={s.sectionTitle}>今日の調子</Text>
       <View style={s.card}>
         <View style={s.moodRow}>
@@ -250,22 +289,22 @@ export default function HealthCareScreen() {
       {/* Appetite */}
       <Text style={s.sectionTitle}>食欲</Text>
       <View style={s.card}>
-        {APPETITE_LEVELS.map((level, i) => (
+        {APPETITE_OPTIONS.map((opt, i) => (
           <TouchableOpacity
-            key={level}
+            key={opt.value}
             style={[
               s.listOption,
-              appetite === level && s.listOptionSelected,
-              i < APPETITE_LEVELS.length - 1 && s.listOptionBorder,
+              appetite === opt.value && s.listOptionSelected,
+              i < APPETITE_OPTIONS.length - 1 && s.listOptionBorder,
             ]}
-            onPress={() => setAppetite(level)}
+            onPress={() => setAppetite(opt.value)}
             accessibilityRole="radio"
-            accessibilityState={{ selected: appetite === level }}
+            accessibilityState={{ selected: appetite === opt.value }}
           >
-            <Text style={[s.listOptionText, appetite === level && s.listOptionTextSelected]}>
-              {level}
+            <Text style={[s.listOptionText, appetite === opt.value && s.listOptionTextSelected]}>
+              {opt.label}
             </Text>
-            {appetite === level && <Text style={s.checkmark}>✓</Text>}
+            {appetite === opt.value && <Text style={s.checkmark}>✓</Text>}
           </TouchableOpacity>
         ))}
       </View>
@@ -293,64 +332,70 @@ export default function HealthCareScreen() {
         </View>
       </View>
 
-      {/* Sleep */}
+      {/* Sleep — bed/wake time pickers */}
       <Text style={s.sectionTitle}>睡眠時間</Text>
       <View style={s.card}>
         {sleepSource === 'healthkit' && (
           <Text style={s.hkBadge}>🍎 ヘルスケア連携</Text>
         )}
-        <View style={s.stepperRow}>
-          <TouchableOpacity
-            style={[s.stepperBtn, sleepHours <= 0 && s.stepperBtnDisabled]}
-            onPress={() => adjustSleep(-0.5)}
-            disabled={sleepHours <= 0}
-            accessibilityLabel="睡眠時間を30分減らす"
-          >
-            <Text style={s.stepperBtnText}>−</Text>
-          </TouchableOpacity>
-          <View style={s.stepperValue}>
-            <Text style={s.stepperValueText}>{formatSleep(sleepHours)}</Text>
+        <View style={s.sleepRow}>
+          <View style={s.sleepTimeBlock}>
+            <Text style={s.sleepTimeLabel}>就寝</Text>
+            <TouchableOpacity
+              style={s.sleepTimeBtn}
+              onPress={() => setShowTimePicker('bed')}
+            >
+              <Text style={s.sleepTimeText}>{formatTime(bedTime)}</Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity
-            style={[s.stepperBtn, sleepHours >= 12 && s.stepperBtnDisabled]}
-            onPress={() => adjustSleep(0.5)}
-            disabled={sleepHours >= 12}
-            accessibilityLabel="睡眠時間を30分増やす"
-          >
-            <Text style={s.stepperBtnText}>＋</Text>
-          </TouchableOpacity>
+          <Text style={s.sleepArrow}>→</Text>
+          <View style={s.sleepTimeBlock}>
+            <Text style={s.sleepTimeLabel}>起床</Text>
+            <TouchableOpacity
+              style={s.sleepTimeBtn}
+              onPress={() => setShowTimePicker('wake')}
+            >
+              <Text style={s.sleepTimeText}>{formatTime(wakeTime)}</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={s.sleepDurationBlock}>
+            <Text style={s.sleepTimeLabel}>合計</Text>
+            <Text style={s.sleepDurationText}>{formatDuration(sleepDuration)}</Text>
+          </View>
         </View>
-        {sleepSource === 'manual' && (
-          <Text style={s.hint}>30分単位で調整できます</Text>
-        )}
       </View>
 
-      {/* Exercise — HealthKit only */}
-      {hkAvailable && (
-        <>
-          <Text style={s.sectionTitle}>運動</Text>
-          <View style={s.card}>
-            <Text style={s.hkBadge}>🍎 ヘルスケア連携</Text>
+      {/* Exercise — always shown; connect button when no HealthKit data */}
+      <Text style={s.sectionTitle}>運動</Text>
+      <View style={s.card}>
+        {steps !== null || activeCalories !== null ? (
+          <>
+            <Text style={s.hkBadge}>🍎 ヘルスケア連携中</Text>
             <View style={s.exerciseRow}>
               <View style={s.exerciseItem}>
                 <Text style={s.exerciseIcon}>👟</Text>
-                <Text style={s.exerciseValue}>
-                  {steps !== null ? steps.toLocaleString() : '---'}
-                </Text>
+                <Text style={s.exerciseValue}>{steps?.toLocaleString() ?? '---'}</Text>
                 <Text style={s.exerciseUnit}>歩</Text>
               </View>
               <View style={s.exerciseDivider} />
               <View style={s.exerciseItem}>
                 <Text style={s.exerciseIcon}>🔥</Text>
-                <Text style={s.exerciseValue}>
-                  {activeCalories !== null ? activeCalories.toLocaleString() : '---'}
-                </Text>
+                <Text style={s.exerciseValue}>{activeCalories?.toLocaleString() ?? '---'}</Text>
                 <Text style={s.exerciseUnit}>kcal</Text>
               </View>
             </View>
-          </View>
-        </>
-      )}
+          </>
+        ) : (
+          <TouchableOpacity style={s.hkConnectBtn} onPress={handleConnectHealthKit}>
+            <Text style={s.hkConnectIcon}>🍎</Text>
+            <View style={s.hkConnectText}>
+              <Text style={s.hkConnectTitle}>ヘルスケアと連携する</Text>
+              <Text style={s.hkConnectSub}>歩数・消費カロリーを自動取得</Text>
+            </View>
+            <Text style={s.hkConnectArrow}>›</Text>
+          </TouchableOpacity>
+        )}
+      </View>
 
       {/* Save */}
       <TouchableOpacity
@@ -358,7 +403,6 @@ export default function HealthCareScreen() {
         onPress={handleSave}
         disabled={saving}
         accessibilityRole="button"
-        accessibilityLabel={alreadySaved ? '記録を更新する' : '記録する'}
       >
         {saving ? (
           <ActivityIndicator color="#FFF" />
@@ -368,6 +412,60 @@ export default function HealthCareScreen() {
       </TouchableOpacity>
 
       <View style={s.bottomPad} />
+
+      {/* Time Picker — iOS: bottom sheet modal, Android: native dialog */}
+      {Platform.OS === 'ios' && showTimePicker !== null && (
+        <Modal
+          visible
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowTimePicker(null)}
+        >
+          <View style={s.overlay}>
+            <View style={s.pickerCard}>
+              <View style={s.pickerHeader}>
+                <TouchableOpacity onPress={() => setShowTimePicker(null)}>
+                  <Text style={s.pickerCancelText}>キャンセル</Text>
+                </TouchableOpacity>
+                <Text style={s.pickerTitle}>
+                  {showTimePicker === 'bed' ? '就寝時刻' : '起床時刻'}
+                </Text>
+                <TouchableOpacity onPress={() => setShowTimePicker(null)}>
+                  <Text style={s.pickerDoneText}>完了</Text>
+                </TouchableOpacity>
+              </View>
+              <DateTimePicker
+                value={showTimePicker === 'bed' ? bedTime : wakeTime}
+                mode="time"
+                display="spinner"
+                locale="ja"
+                onChange={(_, date) => {
+                  if (date) {
+                    if (showTimePicker === 'bed') { setBedTime(date); }
+                    else { setWakeTime(date); }
+                    setSleepSource('manual');
+                  }
+                }}
+              />
+            </View>
+          </View>
+        </Modal>
+      )}
+      {Platform.OS === 'android' && showTimePicker !== null && (
+        <DateTimePicker
+          value={showTimePicker === 'bed' ? bedTime : wakeTime}
+          mode="time"
+          display="default"
+          onChange={(_, date) => {
+            setShowTimePicker(null);
+            if (date) {
+              if (showTimePicker === 'bed') { setBedTime(date); }
+              else { setWakeTime(date); }
+              setSleepSource('manual');
+            }
+          }}
+        />
+      )}
     </ScrollView>
   );
 }
@@ -398,12 +496,7 @@ const s = StyleSheet.create({
   headerRight: { alignItems: 'flex-end' },
   title: { fontSize: 22, fontWeight: 'bold', color: C.primary },
   dateText: { fontSize: 13, color: C.sub },
-  savedBadge: {
-    marginTop: 4,
-    fontSize: 12,
-    color: '#2E7D32',
-    fontWeight: 'bold',
-  },
+  savedBadge: { marginTop: 4, fontSize: 12, color: '#2E7D32', fontWeight: 'bold' },
 
   sectionTitle: {
     fontSize: 13,
@@ -423,10 +516,7 @@ const s = StyleSheet.create({
   },
 
   // Mood
-  moodRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
+  moodRow: { flexDirection: 'row', justifyContent: 'space-between' },
   moodBtn: {
     flex: 1,
     alignItems: 'center',
@@ -454,7 +544,7 @@ const s = StyleSheet.create({
   tagTextSelected: { color: C.primary, fontWeight: 'bold' },
   hint: { fontSize: 12, color: C.muted, marginTop: 10 },
 
-  // Appetite list
+  // Appetite
   listOption: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -462,13 +552,16 @@ const s = StyleSheet.create({
     paddingVertical: 13,
     paddingHorizontal: 4,
   },
-  listOptionBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border },
+  listOptionBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: C.border,
+  },
   listOptionSelected: { backgroundColor: C.selected, borderRadius: 8, paddingHorizontal: 8 },
   listOptionText: { fontSize: 15, color: C.text },
   listOptionTextSelected: { color: C.primary, fontWeight: 'bold' },
   checkmark: { fontSize: 16, color: C.primary, fontWeight: 'bold' },
 
-  // Alcohol toggle
+  // Alcohol
   toggleRow: { flexDirection: 'row', gap: 8 },
   toggleBtn: {
     flex: 1,
@@ -482,26 +575,39 @@ const s = StyleSheet.create({
   toggleBtnText: { fontSize: 16, color: C.sub, fontWeight: '500' },
   toggleBtnTextActive: { color: '#FFF', fontWeight: 'bold' },
 
-  // Sleep stepper
+  // Sleep
   hkBadge: { fontSize: 11, color: C.primary, marginBottom: 8 },
-  stepperRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 },
-  stepperBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  sleepRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  sleepTimeBlock: { alignItems: 'center' },
+  sleepTimeLabel: { fontSize: 11, color: C.muted, marginBottom: 4 },
+  sleepTimeBtn: {
     backgroundColor: C.selected,
-    alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
   },
-  stepperBtnDisabled: { opacity: 0.35 },
-  stepperBtnText: { fontSize: 22, color: C.primary, fontWeight: 'bold', lineHeight: 26 },
-  stepperValue: {
-    minWidth: 110,
-    alignItems: 'center',
-  },
-  stepperValueText: { fontSize: 24, fontWeight: 'bold', color: C.text },
+  sleepTimeText: { fontSize: 22, fontWeight: 'bold', color: C.primary },
+  sleepArrow: { fontSize: 18, color: C.muted, marginTop: 12 },
+  sleepDurationBlock: { alignItems: 'center' },
+  sleepDurationText: { fontSize: 18, fontWeight: 'bold', color: C.text },
 
   // Exercise
+  hkConnectBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    gap: 12,
+  },
+  hkConnectIcon: { fontSize: 28 },
+  hkConnectText: { flex: 1 },
+  hkConnectTitle: { fontSize: 15, fontWeight: 'bold', color: C.primary },
+  hkConnectSub: { fontSize: 12, color: C.muted, marginTop: 2 },
+  hkConnectArrow: { fontSize: 22, color: C.muted },
   exerciseRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -514,7 +620,7 @@ const s = StyleSheet.create({
   exerciseValue: { fontSize: 22, fontWeight: 'bold', color: C.text },
   exerciseUnit: { fontSize: 13, color: C.muted },
 
-  // Save button
+  // Save
   saveBtn: {
     marginTop: 28,
     backgroundColor: C.primary,
@@ -526,4 +632,29 @@ const s = StyleSheet.create({
   saveBtnText: { color: '#FFF', fontSize: 17, fontWeight: 'bold' },
 
   bottomPad: { height: 20 },
+
+  // Time picker modal (iOS bottom sheet)
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  pickerCard: {
+    backgroundColor: C.card,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 24,
+  },
+  pickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: C.border,
+  },
+  pickerTitle: { fontSize: 16, fontWeight: 'bold', color: C.text },
+  pickerCancelText: { fontSize: 15, color: C.muted },
+  pickerDoneText: { fontSize: 15, color: C.primary, fontWeight: 'bold' },
 });
