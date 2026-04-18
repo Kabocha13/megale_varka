@@ -1038,7 +1038,14 @@ function ViewRow({
     <View style={[vS.row, last && vS.rowLast]}>
       <Text style={vS.rowLabel}>{label}</Text>
       {isUrl && value ? (
-        <TouchableOpacity onPress={() => Linking.openURL(normalizeUrl(value))} hitSlop={{ top: 4, bottom: 4 }}>
+        <TouchableOpacity
+          onPress={() => {
+            Linking.openURL(normalizeUrl(value)).catch(() => {
+              Alert.alert('リンクを開けませんでした', 'URLを確認して再度お試しください。');
+            });
+          }}
+          hitSlop={{ top: 4, bottom: 4 }}
+        >
           <Text style={vS.rowValueLink} numberOfLines={1}>{value}</Text>
         </TouchableOpacity>
       ) : (
@@ -1245,7 +1252,13 @@ function CompanyListScreen({ companies, onSelect, onEdit, onAdd }: CompanyListSc
               <View style={lS.cardTop}>
                 <TouchableOpacity
                   style={lS.cardNameWrap}
-                  onPress={() => item.myPageUrl ? Linking.openURL(normalizeUrl(item.myPageUrl)) : null}
+                  onPress={() => {
+                    if (!item.myPageUrl) return;
+                    const url = normalizeUrl(item.myPageUrl);
+                    Linking.openURL(url).catch(() => {
+                      Alert.alert('エラー', 'URLを開けませんでした');
+                    });
+                  }}
                   disabled={!item.myPageUrl}
                   hitSlop={{ top: 4, bottom: 4 }}
                 >
@@ -1812,9 +1825,24 @@ function JobManagementScreen() {
         AsyncStorage.getItem(STORAGE_KEY),
         AsyncStorage.getItem(GLOBAL_FIELDS_KEY),
       ]).then(([cJson, fJson]) => {
-        const loaded: Company[] = cJson ? JSON.parse(cJson) : [];
+        let loaded: Company[] = [];
+        try {
+          loaded = cJson ? JSON.parse(cJson) : [];
+          if (!Array.isArray(loaded)) loaded = [];
+        } catch {
+          loaded = [];
+          AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
+        }
+        let fields: GlobalField[] = [];
+        try {
+          fields = fJson ? JSON.parse(fJson) : [];
+          if (!Array.isArray(fields)) fields = [];
+        } catch {
+          fields = [];
+          AsyncStorage.removeItem(GLOBAL_FIELDS_KEY).catch(() => {});
+        }
         if (loaded.length) setCompanies(loaded);
-        if (fJson) setGlobalFields(JSON.parse(fJson));
+        if (fields.length) setGlobalFields(fields);
         // Re-sync all notifications in case reminder days changed in Settings
         loaded.forEach(c => syncNotifications(c));
       }).catch(() => {});
@@ -1824,8 +1852,19 @@ function JobManagementScreen() {
         getDoc(doc(db, 'users', uid, 'job_settings', 'global_fields')),
       ]).then(([snap, fSnap]) => {
         const loaded = snap.docs.map(d => {
-          const data = d.data() as Company;
-          return { ...data, id: data.id ?? d.id };
+          const data = d.data() as Partial<Company>;
+          return {
+            id: data.id ?? d.id,
+            name: data.name ?? '',
+            myPageUrl: data.myPageUrl ?? '',
+            myPageLoginId: data.myPageLoginId ?? '',
+            currentGoal: data.currentGoal ?? '',
+            selectionStatus: data.selectionStatus ?? '',
+            desireLevel: data.desireLevel ?? '',
+            tasks: Array.isArray(data.tasks) ? data.tasks : [],
+            globalFieldValues: data.globalFieldValues && typeof data.globalFieldValues === 'object' && !Array.isArray(data.globalFieldValues) ? data.globalFieldValues : {},
+            memo: data.memo ?? '',
+          } as Company;
         });
         setCompanies(loaded);
         if (fSnap.exists()) setGlobalFields(fSnap.data().fields ?? []);
