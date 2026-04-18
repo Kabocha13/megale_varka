@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
   Linking,
@@ -1886,7 +1887,7 @@ function JobManagementScreen() {
 
   if (view.mode === 'view') {
     const company = companies.find(c => c.id === view.companyId);
-    if (!company) return null;
+    if (!company) return <View style={s.loadingContainer}><ActivityIndicator color={C.primary} /></View>;
     return (
       <CompanyViewScreen
         company={company}
@@ -1920,7 +1921,7 @@ function JobManagementScreen() {
 
   if (view.mode === 'detail') {
     const company = companies.find(c => c.id === view.companyId);
-    if (!company) return null;
+    if (!company) return <View style={s.loadingContainer}><ActivityIndicator color={C.primary} /></View>;
     return (
       <CompanyDetailScreen
         company={company}
@@ -1945,3 +1946,12 @@ function JobManagementScreen() {
 }
 
 export default JobManagementScreen;
+
+const s = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: C.bg,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+});

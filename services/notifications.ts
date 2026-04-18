@@ -15,11 +15,11 @@ const CHANNEL_ID = 'job_tasks';
 // ─── 設定 ─────────────────────────────────────────────────────────────────────
 
 function sanitizeReminderDays(value: unknown): number[] {
-  const rawDays = Array.isArray(value) ? value : [value];
+  if (!Array.isArray(value)) return [...DEFAULT_REMINDER_DAYS];
   const allowedDays = new Set<number>(ALL_REMINDER_DAY_OPTIONS);
   const sanitizedDays = Array.from(
     new Set(
-      rawDays.filter(
+      value.filter(
         (day): day is number =>
           typeof day === 'number' &&
           Number.isFinite(day) &&
