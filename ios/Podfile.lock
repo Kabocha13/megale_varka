@@ -1839,6 +1839,8 @@ PODS:
     - React-utils (= 0.85.1)
     - ReactNativeDependencies
   - ReactNativeDependencies (0.85.1)
+  - RNAppleHealthKit (1.7.0):
+    - React
   - RNDateTimePicker (9.1.0):
     - hermes-engine
     - RCTRequired
@@ -1945,6 +1947,7 @@ DEPENDENCIES:
   - ReactCodegen (from `build/generated/ios/ReactCodegen`)
   - ReactCommon/turbomodule/core (from `../node_modules/react-native/ReactCommon`)
   - ReactNativeDependencies (from `../node_modules/react-native/third-party-podspecs/ReactNativeDependencies.podspec`)
+  - RNAppleHealthKit (from `../node_modules/react-native-health`)
   - "RNDateTimePicker (from `../node_modules/@react-native-community/datetimepicker`)"
   - "RNNotifee (from `../node_modules/@notifee/react-native`)"
   - Yoga (from `../node_modules/react-native/ReactCommon/yoga`)
@@ -2101,6 +2104,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon"
   ReactNativeDependencies:
     :podspec: "../node_modules/react-native/third-party-podspecs/ReactNativeDependencies.podspec"
+  RNAppleHealthKit:
+    :path: "../node_modules/react-native-health"
   RNDateTimePicker:
     :path: "../node_modules/@react-native-community/datetimepicker"
   RNNotifee:
@@ -2184,10 +2189,11 @@ SPEC CHECKSUMS:
   ReactCodegen: aac672d7021359dc55fbd6d63f56192651664f09
   ReactCommon: 66763e5bd1b778828ff6cb82d771b7162a5215c2
   ReactNativeDependencies: 58b9a40463b4536c0da9cde0ed383c773dbf6647
+  RNAppleHealthKit: 86ef7ab70f762b802f5c5289372de360cca701f9
   RNDateTimePicker: 7b2738f1e595f83c14580a11c476872755c5befc
   RNNotifee: 5e3b271e8ea7456a36eec994085543c9adca9168
   Yoga: b1085f68c014785350a2afdc95eaef0d49f23ccb
 
-PODFILE CHECKSUM: bf4e261a0f87e1ff47ec8cf9122fa88cfeeda9a4
+PODFILE CHECKSUM: e3e1e64f83f6b06028010ffe5d3cee6e30d5fd0e
 
 COCOAPODS: 1.16.2
