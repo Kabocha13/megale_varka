@@ -9,11 +9,13 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Modal,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -27,7 +29,7 @@ import {
 
 // --- Types ---
 type Mood = 1 | 2 | 3 | 4 | 5;
-type AppetiteValue = 'full' | 'normal' | 'selective' | 'light' | 'water' | 'nothing';
+type AppetiteValue = 'nothing' | 'water' | 'noodles' | 'set_meal' | 'steak';
 
 // --- Constants ---
 // Left=悪い, right=良い
@@ -42,20 +44,17 @@ const MOODS: { value: Mood; emoji: string; label: string }[] = [
 const SYMPTOMS = [
   '気分の落ち込み',
   'やる気が出ない',
-  '不安・焦り感',
   '体の重さ・疲れ',
   '集中できない',
-  '孤独感',
   'その他',
 ];
 
-const APPETITE_OPTIONS: { value: AppetiteValue; label: string }[] = [
-  { value: 'full',      label: '全力全開！何でもいける 🍛' },
-  { value: 'normal',    label: '普通に食べられる' },
-  { value: 'selective', label: '好きなものならいける 🍰' },
-  { value: 'light',     label: 'お粥・うどんなら... 🍜' },
-  { value: 'water',     label: '水・お茶ならいける 💧' },
-  { value: 'nothing',   label: '胃も休業中 🙅' },
+const APPETITE_OPTIONS: { value: AppetiteValue; emoji: string; label: string }[] = [
+  { value: 'nothing',  emoji: '🚫', label: '食べれない' },
+  { value: 'water',    emoji: '💧', label: '水' },
+  { value: 'noodles',  emoji: '🍜', label: '麺類' },
+  { value: 'set_meal', emoji: '🍱', label: '定食' },
+  { value: 'steak',    emoji: '🥩', label: 'ステーキ' },
 ];
 
 // --- Helpers ---
@@ -124,6 +123,7 @@ export default function HealthCareScreen() {
 
   const [mood, setMood] = useState<Mood | null>(null);
   const [symptoms, setSymptoms] = useState<string[]>([]);
+  const [otherNote, setOtherNote] = useState('');
   const [appetite, setAppetite] = useState<AppetiteValue | null>(null);
   const [alcohol, setAlcohol] = useState(false);
   const [bedTime, setBedTime] = useState<Date>(mkBedTime);
@@ -159,6 +159,7 @@ export default function HealthCareScreen() {
             setAlreadySaved(true);
             if (data.mood) { setMood(data.mood as Mood); }
             if (data.symptoms) { setSymptoms(data.symptoms); }
+            if (data.otherNote) { setOtherNote(data.otherNote); }
             if (data.appetite) { setAppetite(data.appetite as AppetiteValue); }
             setAlcohol(data.alcohol ?? false);
             if (data.bedTime) { setBedTime(strToDate(data.bedTime)); }
@@ -184,28 +185,6 @@ export default function HealthCareScreen() {
     );
   }, []);
 
-  const handleConnectHealthKit = async () => {
-    const result = await requestHealthKitPermissions();
-    if (!result.ok) {
-      Alert.alert(
-        'ヘルスケアと連携できませんでした',
-        '設定アプリの「プライバシーとセキュリティ」→「ヘルスケア」から許可してください。',
-      );
-      return;
-    }
-    try {
-      const hk = await fetchTodayHealthKitData();
-      setSteps(hk.steps);
-      setActiveCalories(hk.activeCalories);
-      if (hk.sleepHours !== null) {
-        // `sleepHours` だけでは実際の就寝/起床時刻は復元できないため、
-        // 現在時刻基準の擬似的な bed/wake を作って保存しない。
-        // 睡眠時刻は既存のユーザー入力値を保持する。
-      }
-    } catch (_) {
-      // silently ignore fetch errors after connect
-    }
-  };
 
   const handleSave = async () => {
     if (!uid) { return; }
@@ -220,6 +199,7 @@ export default function HealthCareScreen() {
         date: today,
         mood,
         symptoms,
+        otherNote: symptoms.includes('その他') ? otherNote : '',
         appetite,
         alcohol,
         bedTime: timeToStr(bedTime),
@@ -304,29 +284,39 @@ export default function HealthCareScreen() {
         {symptoms.length === 0 && (
           <Text style={s.hint}>なければ選択不要です</Text>
         )}
+        {symptoms.includes('その他') && (
+          <TextInput
+            style={s.otherInput}
+            value={otherNote}
+            onChangeText={setOtherNote}
+            placeholder="その他の症状を入力してください"
+            placeholderTextColor={C.muted}
+            multiline
+            maxLength={200}
+          />
+        )}
       </View>
 
       {/* Appetite */}
       <Text style={s.sectionTitle}>食欲</Text>
       <View style={s.card}>
-        {APPETITE_OPTIONS.map((opt, i) => (
-          <TouchableOpacity
-            key={opt.value}
-            style={[
-              s.listOption,
-              appetite === opt.value && s.listOptionSelected,
-              i < APPETITE_OPTIONS.length - 1 && s.listOptionBorder,
-            ]}
-            onPress={() => setAppetite(opt.value)}
-            accessibilityRole="radio"
-            accessibilityState={{ selected: appetite === opt.value }}
-          >
-            <Text style={[s.listOptionText, appetite === opt.value && s.listOptionTextSelected]}>
-              {opt.label}
-            </Text>
-            {appetite === opt.value && <Text style={s.checkmark}>✓</Text>}
-          </TouchableOpacity>
-        ))}
+        <View style={s.appetiteRow}>
+          {APPETITE_OPTIONS.map(opt => (
+            <TouchableOpacity
+              key={opt.value}
+              style={[s.appetiteBtn, appetite === opt.value && s.appetiteBtnSelected]}
+              onPress={() => setAppetite(opt.value)}
+              accessibilityRole="radio"
+              accessibilityLabel={opt.label}
+              accessibilityState={{ selected: appetite === opt.value }}
+            >
+              <Text style={s.appetiteEmoji}>{opt.emoji}</Text>
+              <Text style={[s.appetiteLabel, appetite === opt.value && s.appetiteLabelSelected]}>
+                {opt.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
 
       {/* Alcohol */}
@@ -385,7 +375,7 @@ export default function HealthCareScreen() {
         </View>
       </View>
 
-      {/* Exercise — always shown; connect button only on iOS when no HealthKit data */}
+      {/* Exercise */}
       <Text style={s.sectionTitle}>運動</Text>
       <View style={s.card}>
         {steps !== null || activeCalories !== null ? (
@@ -406,14 +396,18 @@ export default function HealthCareScreen() {
             </View>
           </>
         ) : hkAvailable ? (
-          <TouchableOpacity style={s.hkConnectBtn} onPress={handleConnectHealthKit}>
-            <Text style={s.hkConnectIcon}>🍎</Text>
-            <View style={s.hkConnectText}>
-              <Text style={s.hkConnectTitle}>ヘルスケアと連携する</Text>
-              <Text style={s.hkConnectSub}>歩数・消費カロリーを自動取得</Text>
-            </View>
-            <Text style={s.hkConnectArrow}>›</Text>
-          </TouchableOpacity>
+          <View style={s.hkOffPrompt}>
+            <Text style={s.hkOffIcon}>🍎</Text>
+            <Text style={s.hkOffTitle}>ヘルスケア連携がオフです</Text>
+            <Text style={s.hkOffSub}>
+              歩数・消費カロリーを表示するには、{'\n'}
+              設定 › プライバシーとセキュリティ › ヘルスケア{'\n'}
+              からこのアプリをオンにしてください。
+            </Text>
+            <TouchableOpacity style={s.hkOffBtn} onPress={() => Linking.openSettings()}>
+              <Text style={s.hkOffBtnText}>設定を開く</Text>
+            </TouchableOpacity>
+          </View>
         ) : (
           <Text style={s.hkUnavailableText}>運動データの連携はiOSのみ利用可能です</Text>
         )}
@@ -569,22 +563,32 @@ const s = StyleSheet.create({
   tagText: { fontSize: 13, color: C.text },
   tagTextSelected: { color: C.primary, fontWeight: 'bold' },
   hint: { fontSize: 12, color: C.muted, marginTop: 10 },
+  otherInput: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 14,
+    color: C.text,
+    minHeight: 60,
+    textAlignVertical: 'top',
+  },
 
   // Appetite
-  listOption: {
-    flexDirection: 'row',
+  appetiteRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  appetiteBtn: {
+    flex: 1,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 13,
-    paddingHorizontal: 4,
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginHorizontal: 2,
   },
-  listOptionBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: C.border,
-  },
-  listOptionSelected: { backgroundColor: C.selected, borderRadius: 8, paddingHorizontal: 8 },
-  listOptionText: { fontSize: 15, color: C.text },
-  listOptionTextSelected: { color: C.primary, fontWeight: 'bold' },
+  appetiteBtnSelected: { backgroundColor: C.selected },
+  appetiteEmoji: { fontSize: 28 },
+  appetiteLabel: { fontSize: 9, color: C.muted, marginTop: 4, textAlign: 'center' },
+  appetiteLabelSelected: { color: C.primary, fontWeight: 'bold' },
   checkmark: { fontSize: 16, color: C.primary, fontWeight: 'bold' },
 
   // Alcohol
@@ -623,17 +627,18 @@ const s = StyleSheet.create({
   sleepDurationText: { fontSize: 18, fontWeight: 'bold', color: C.text },
 
   // Exercise
-  hkConnectBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  hkOffPrompt: { alignItems: 'center', paddingVertical: 12, gap: 6 },
+  hkOffIcon: { fontSize: 32, marginBottom: 4 },
+  hkOffTitle: { fontSize: 15, fontWeight: 'bold', color: C.primary },
+  hkOffSub: { fontSize: 12, color: C.sub, textAlign: 'center', lineHeight: 20 },
+  hkOffBtn: {
+    marginTop: 10,
+    backgroundColor: C.primary,
+    paddingHorizontal: 24,
     paddingVertical: 10,
-    gap: 12,
+    borderRadius: 20,
   },
-  hkConnectIcon: { fontSize: 28 },
-  hkConnectText: { flex: 1 },
-  hkConnectTitle: { fontSize: 15, fontWeight: 'bold', color: C.primary },
-  hkConnectSub: { fontSize: 12, color: C.muted, marginTop: 2 },
-  hkConnectArrow: { fontSize: 22, color: C.muted },
+  hkOffBtnText: { color: '#FFF', fontSize: 14, fontWeight: 'bold' },
   hkUnavailableText: { fontSize: 13, color: C.muted, textAlign: 'center', paddingVertical: 8 },
   exerciseRow: {
     flexDirection: 'row',
