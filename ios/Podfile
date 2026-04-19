@@ -8,8 +8,12 @@ require Pod::Executable.execute_command('node', ['-p',
 platform :ios, min_ios_version_supported
 prepare_react_native_project!
 
-# react-native-health v1.x は New Architecture 非対応のため、未設定時のみ無効化
-ENV['RCT_NEW_ARCH_ENABLED'] ||= '0'
+# react-native-health v1.x は New Architecture 非対応。
+# Podfile でグローバルに既定値を書き換えると Info.plist 側の設定と不整合になり得るため、
+# ここでは既定値を強制せず、必要な設定はビルド構成側で明示する。
+if ENV['RCT_NEW_ARCH_ENABLED'] == '1'
+  raise "RNAppleHealthKit (react-native-health v1.x) does not support React Native New Architecture. Set RCT_NEW_ARCH_ENABLED=0 in your build configuration or upgrade the library."
+end
 
 linkage = ENV['USE_FRAMEWORKS']
 if linkage != nil
