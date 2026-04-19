@@ -195,11 +195,9 @@ export default function HealthCareScreen() {
       setSteps(hk.steps);
       setActiveCalories(hk.activeCalories);
       if (hk.sleepHours !== null) {
-        const wake = new Date();
-        const bed = new Date(wake.getTime() - hk.sleepHours * 3_600_000);
-        setBedTime(bed);
-        setWakeTime(wake);
-        setSleepSource('healthkit');
+        // `sleepHours` だけでは実際の就寝/起床時刻は復元できないため、
+        // 現在時刻基準の擬似的な bed/wake を作って保存しない。
+        // 睡眠時刻は既存のユーザー入力値を保持する。
       }
     } catch (_) {
       // silently ignore fetch errors after connect
