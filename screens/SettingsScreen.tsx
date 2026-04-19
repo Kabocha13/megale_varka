@@ -1,6 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import notifee, { AuthorizationStatus } from '@notifee/react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  AppState,
+  AppStateStatus,
+  Linking,
   Modal,
   ScrollView,
   StyleSheet,
@@ -8,12 +12,38 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useAuth } from '../context/AuthContext';
+import { hasRequestedHealthKit, isHealthKitAvailable } from '../services/healthService';
 import {
   DEFAULT_REMINDER_DAYS,
   getReminderDays,
   saveReminderDays,
 } from '../services/notifications';
-import { useAuth } from '../context/AuthContext';
+
+type PermStatus = 'granted' | 'denied' | 'unavailable' | 'loading';
+
+interface PermState {
+  notification: PermStatus;
+  healthKit: PermStatus;
+}
+
+async function fetchPermStatuses(): Promise<PermState> {
+  const [notifSettings, hkAsked] = await Promise.all([
+    notifee.getNotificationSettings(),
+    hasRequestedHealthKit(),
+  ]);
+
+  const notifGranted =
+    notifSettings.authorizationStatus === AuthorizationStatus.AUTHORIZED ||
+    notifSettings.authorizationStatus === AuthorizationStatus.PROVISIONAL;
+
+  const hkAvail = isHealthKitAvailable();
+
+  return {
+    notification: notifGranted ? 'granted' : 'denied',
+    healthKit: !hkAvail ? 'unavailable' : hkAsked ? 'granted' : 'denied',
+  };
+}
 
 const REMINDER_OPTIONS = [
   { label: '当日', days: 0 },
@@ -38,13 +68,29 @@ export default function SettingsScreen() {
   const [reminderDays, setReminderDays] = useState<number[]>(DEFAULT_REMINDER_DAYS);
   const [showPicker, setShowPicker] = useState(false);
   const [draft, setDraft] = useState<number[]>(DEFAULT_REMINDER_DAYS);
+  const [perms, setPerms] = useState<PermState>({ notification: 'loading', healthKit: 'loading' });
+  const appState = useRef(AppState.currentState);
+
+  const refreshPerms = useCallback(() => {
+    fetchPermStatuses().then(setPerms).catch(() => {});
+  }, []);
 
   useEffect(() => {
     getReminderDays().then(days => {
       setReminderDays(days);
       setDraft(days);
     }).catch(() => {});
-  }, []);
+
+    refreshPerms();
+
+    const sub = AppState.addEventListener('change', (next: AppStateStatus) => {
+      if (appState.current.match(/inactive|background/) && next === 'active') {
+        refreshPerms();
+      }
+      appState.current = next;
+    });
+    return () => sub.remove();
+  }, [refreshPerms]);
 
   const handleOpenPicker = () => {
     setDraft(reminderDays);
@@ -74,6 +120,27 @@ export default function SettingsScreen() {
   return (
     <ScrollView style={s.container} contentContainerStyle={s.content}>
       <Text style={s.title}>設定</Text>
+
+      {/* アクセス許可 */}
+      <Text style={s.sectionTitle}>アクセス許可</Text>
+      <View style={s.card}>
+        <PermRow
+          label="通知"
+          status={perms.notification}
+          unavailableText=""
+        />
+        <View style={s.divider} />
+        <PermRow
+          label="ヘルスケア"
+          status={perms.healthKit}
+          unavailableText="iOSのみ利用可能"
+        />
+        {(perms.notification === 'denied' || perms.healthKit === 'denied') && (
+          <TouchableOpacity style={s.openSettingsBtn} onPress={() => Linking.openSettings()}>
+            <Text style={s.openSettingsBtnText}>設定を開く</Text>
+          </TouchableOpacity>
+        )}
+      </View>
 
       {/* リマインド設定 */}
       <Text style={s.sectionTitle}>通知・リマインド</Text>
@@ -138,6 +205,43 @@ export default function SettingsScreen() {
   );
 }
 
+function PermRow({ label, status, unavailableText }: {
+  label: string;
+  status: PermStatus;
+  unavailableText: string;
+}) {
+  let badge: string;
+  let badgeStyle: object;
+  let badgeTextStyle: object;
+
+  if (status === 'loading') {
+    badge = '確認中…';
+    badgeStyle = s.badgeNeutral;
+    badgeTextStyle = s.badgeNeutralText;
+  } else if (status === 'granted') {
+    badge = '✓ 許可済み';
+    badgeStyle = s.badgeGranted;
+    badgeTextStyle = s.badgeGrantedText;
+  } else if (status === 'denied') {
+    badge = '✕ 未許可';
+    badgeStyle = s.badgeDenied;
+    badgeTextStyle = s.badgeDeniedText;
+  } else {
+    badge = unavailableText || '利用不可';
+    badgeStyle = s.badgeNeutral;
+    badgeTextStyle = s.badgeNeutralText;
+  }
+
+  return (
+    <View style={s.permRow}>
+      <Text style={s.permLabel}>{label}</Text>
+      <View style={[s.badge, badgeStyle]}>
+        <Text style={[s.badgeText, badgeTextStyle]}>{badge}</Text>
+      </View>
+    </View>
+  );
+}
+
 const C = {
   primary: '#304E78',
   bg: '#F2EBE4',
@@ -182,6 +286,37 @@ const s = StyleSheet.create({
   },
   valueBtnText: { fontSize: 13, color: C.primary, fontWeight: 'bold', marginRight: 4, flexShrink: 1 },
   arrow: { fontSize: 10, color: C.muted },
+  permRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  permLabel: { fontSize: 15, color: C.text, fontWeight: '500' },
+  divider: { height: StyleSheet.hairlineWidth, backgroundColor: C.border, marginHorizontal: 16 },
+  badge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  badgeText: { fontSize: 12, fontWeight: 'bold' },
+  badgeGranted: { backgroundColor: '#E8F5E9' },
+  badgeGrantedText: { color: '#2E7D32' },
+  badgeDenied: { backgroundColor: '#FFEBEE' },
+  badgeDeniedText: { color: '#C62828' },
+  badgeNeutral: { backgroundColor: '#F5F5F5' },
+  badgeNeutralText: { color: C.muted },
+  openSettingsBtn: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    marginTop: 4,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: C.primary,
+    alignItems: 'center',
+  },
+  openSettingsBtnText: { color: '#FFF', fontSize: 14, fontWeight: 'bold' },
   logoutRow: { paddingVertical: 14, paddingHorizontal: 16, alignItems: 'center' },
   logoutText: { color: C.danger, fontSize: 16, fontWeight: 'bold' },
   overlay: {
