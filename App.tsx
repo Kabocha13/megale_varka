@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   StatusBar,
@@ -17,6 +17,8 @@ import JobSupportScreen from './screens/JobSupportScreen';
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
 import SettingsScreen from './screens/SettingsScreen';
+import { requestHealthKitPermissions } from './services/healthService';
+import { requestNotificationPermission } from './services/notifications';
 
 type TabName = 'health_care' | 'job_management' | 'job_support' | 'settings';
 type AuthScreen = 'login' | 'register' | 'forgot_password';
@@ -137,6 +139,14 @@ function AppContent() {
 }
 
 function App() {
+  useEffect(() => {
+    // Request permissions sequentially so dialogs don't stack
+    (async () => {
+      await requestNotificationPermission().catch(() => {});
+      await requestHealthKitPermissions().catch(() => {});
+    })();
+  }, []);
+
   return (
     <SafeAreaProvider>
       <AuthProvider>
