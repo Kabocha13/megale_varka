@@ -9,7 +9,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Linking,
   Modal,
   Platform,
   ScrollView,
@@ -24,7 +23,6 @@ import { db } from '../firebase/config';
 import {
   fetchTodayHealthKitData,
   isHealthKitAvailable,
-  requestHealthKitPermissions,
 } from '../services/healthService';
 
 // --- Types ---
@@ -298,7 +296,7 @@ export default function HealthCareScreen() {
       </View>
 
       {/* Appetite */}
-      <Text style={s.sectionTitle}>食欲</Text>
+      <Text style={s.sectionTitle}>食欲レベル</Text>
       <View style={s.card}>
         <View style={s.appetiteRow}>
           {APPETITE_OPTIONS.map(opt => (
@@ -400,13 +398,9 @@ export default function HealthCareScreen() {
             <Text style={s.hkOffIcon}>🍎</Text>
             <Text style={s.hkOffTitle}>ヘルスケア連携がオフです</Text>
             <Text style={s.hkOffSub}>
-              歩数・消費カロリーを表示するには、{'\n'}
               設定 › プライバシーとセキュリティ › ヘルスケア{'\n'}
               からこのアプリをオンにしてください。
             </Text>
-            <TouchableOpacity style={s.hkOffBtn} onPress={() => Linking.openSettings()}>
-              <Text style={s.hkOffBtnText}>設定を開く</Text>
-            </TouchableOpacity>
           </View>
         ) : (
           <Text style={s.hkUnavailableText}>運動データの連携はiOSのみ利用可能です</Text>
@@ -505,25 +499,25 @@ const C = {
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
   center: { justifyContent: 'center', alignItems: 'center' },
-  content: { padding: 20, paddingBottom: 40 },
+  content: { padding: 14, paddingBottom: 16 },
 
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 10,
   },
   headerRight: { alignItems: 'flex-end' },
-  title: { fontSize: 22, fontWeight: 'bold', color: C.primary },
-  dateText: { fontSize: 13, color: C.sub },
-  savedBadge: { marginTop: 4, fontSize: 12, color: '#2E7D32', fontWeight: 'bold' },
+  title: { fontSize: 20, fontWeight: 'bold', color: C.primary },
+  dateText: { fontSize: 12, color: C.sub },
+  savedBadge: { marginTop: 2, fontSize: 11, color: '#2E7D32', fontWeight: 'bold' },
 
   sectionTitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: 'bold',
     color: C.sub,
-    marginBottom: 8,
-    marginTop: 16,
+    marginBottom: 5,
+    marginTop: 10,
   },
   card: {
     backgroundColor: C.card,
@@ -531,8 +525,8 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.border,
     overflow: 'hidden',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
   },
 
   // Mood
@@ -540,39 +534,39 @@ const s = StyleSheet.create({
   moodBtn: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 6,
     borderRadius: 10,
     marginHorizontal: 2,
   },
   moodBtnSelected: { backgroundColor: C.selected },
-  moodEmoji: { fontSize: 28 },
-  moodLabel: { fontSize: 9, color: C.muted, marginTop: 4, textAlign: 'center' },
+  moodEmoji: { fontSize: 24 },
+  moodLabel: { fontSize: 9, color: C.muted, marginTop: 3, textAlign: 'center' },
   moodLabelSelected: { color: C.primary, fontWeight: 'bold' },
 
   // Symptoms
-  tagGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  tagGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   tag: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: C.border,
     backgroundColor: '#FAFAFA',
   },
   tagSelected: { borderColor: C.primary, backgroundColor: C.selected },
-  tagText: { fontSize: 13, color: C.text },
+  tagText: { fontSize: 12, color: C.text },
   tagTextSelected: { color: C.primary, fontWeight: 'bold' },
-  hint: { fontSize: 12, color: C.muted, marginTop: 10 },
+  hint: { fontSize: 11, color: C.muted, marginTop: 6 },
   otherInput: {
-    marginTop: 10,
+    marginTop: 8,
     borderWidth: 1,
     borderColor: C.border,
     borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    fontSize: 13,
     color: C.text,
-    minHeight: 60,
+    minHeight: 50,
     textAlignVertical: 'top',
   },
 
@@ -581,89 +575,81 @@ const s = StyleSheet.create({
   appetiteBtn: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 6,
     borderRadius: 10,
     marginHorizontal: 2,
   },
   appetiteBtnSelected: { backgroundColor: C.selected },
-  appetiteEmoji: { fontSize: 28 },
-  appetiteLabel: { fontSize: 9, color: C.muted, marginTop: 4, textAlign: 'center' },
+  appetiteEmoji: { fontSize: 24 },
+  appetiteLabel: { fontSize: 9, color: C.muted, marginTop: 3, textAlign: 'center' },
   appetiteLabelSelected: { color: C.primary, fontWeight: 'bold' },
-  checkmark: { fontSize: 16, color: C.primary, fontWeight: 'bold' },
+  checkmark: { fontSize: 14, color: C.primary, fontWeight: 'bold' },
 
   // Alcohol
   toggleRow: { flexDirection: 'row', gap: 8 },
   toggleBtn: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 8,
     alignItems: 'center',
     borderRadius: 10,
     borderWidth: 1,
     borderColor: C.border,
   },
   toggleBtnActive: { backgroundColor: C.primary, borderColor: C.primary },
-  toggleBtnText: { fontSize: 16, color: C.sub, fontWeight: '500' },
+  toggleBtnText: { fontSize: 14, color: C.sub, fontWeight: '500' },
   toggleBtnTextActive: { color: '#FFF', fontWeight: 'bold' },
 
   // Sleep
-  hkBadge: { fontSize: 11, color: C.primary, marginBottom: 8 },
+  hkBadge: { fontSize: 10, color: C.primary, marginBottom: 4 },
   sleepRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 4,
+    paddingVertical: 2,
   },
   sleepTimeBlock: { alignItems: 'center' },
-  sleepTimeLabel: { fontSize: 11, color: C.muted, marginBottom: 4 },
+  sleepTimeLabel: { fontSize: 10, color: C.muted, marginBottom: 3 },
   sleepTimeBtn: {
     backgroundColor: C.selected,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
     borderRadius: 10,
   },
-  sleepTimeText: { fontSize: 22, fontWeight: 'bold', color: C.primary },
-  sleepArrow: { fontSize: 18, color: C.muted, marginTop: 12 },
+  sleepTimeText: { fontSize: 20, fontWeight: 'bold', color: C.primary },
+  sleepArrow: { fontSize: 16, color: C.muted, marginTop: 10 },
   sleepDurationBlock: { alignItems: 'center' },
-  sleepDurationText: { fontSize: 18, fontWeight: 'bold', color: C.text },
+  sleepDurationText: { fontSize: 16, fontWeight: 'bold', color: C.text },
 
   // Exercise
-  hkOffPrompt: { alignItems: 'center', paddingVertical: 12, gap: 6 },
-  hkOffIcon: { fontSize: 32, marginBottom: 4 },
-  hkOffTitle: { fontSize: 15, fontWeight: 'bold', color: C.primary },
-  hkOffSub: { fontSize: 12, color: C.sub, textAlign: 'center', lineHeight: 20 },
-  hkOffBtn: {
-    marginTop: 10,
-    backgroundColor: C.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-    borderRadius: 20,
-  },
-  hkOffBtnText: { color: '#FFF', fontSize: 14, fontWeight: 'bold' },
-  hkUnavailableText: { fontSize: 13, color: C.muted, textAlign: 'center', paddingVertical: 8 },
+  hkOffPrompt: { alignItems: 'center', paddingVertical: 6, gap: 4 },
+  hkOffIcon: { fontSize: 24, marginBottom: 2 },
+  hkOffTitle: { fontSize: 13, fontWeight: 'bold', color: C.primary },
+  hkOffSub: { fontSize: 11, color: C.sub, textAlign: 'center', lineHeight: 18 },
+  hkUnavailableText: { fontSize: 12, color: C.muted, textAlign: 'center', paddingVertical: 6 },
   exerciseRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    paddingVertical: 8,
+    paddingVertical: 6,
   },
-  exerciseDivider: { width: 1, height: 50, backgroundColor: C.border },
+  exerciseDivider: { width: 1, height: 44, backgroundColor: C.border },
   exerciseItem: { alignItems: 'center', flex: 1 },
-  exerciseIcon: { fontSize: 24, marginBottom: 4 },
-  exerciseValue: { fontSize: 22, fontWeight: 'bold', color: C.text },
-  exerciseUnit: { fontSize: 13, color: C.muted },
+  exerciseIcon: { fontSize: 20, marginBottom: 2 },
+  exerciseValue: { fontSize: 20, fontWeight: 'bold', color: C.text },
+  exerciseUnit: { fontSize: 12, color: C.muted },
 
   // Save
   saveBtn: {
-    marginTop: 28,
+    marginTop: 14,
     backgroundColor: C.primary,
-    paddingVertical: 16,
+    paddingVertical: 13,
     borderRadius: 14,
     alignItems: 'center',
   },
   saveBtnDisabled: { opacity: 0.6 },
-  saveBtnText: { color: '#FFF', fontSize: 17, fontWeight: 'bold' },
+  saveBtnText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
 
-  bottomPad: { height: 20 },
+  bottomPad: { height: 8 },
 
   // Time picker modal (iOS bottom sheet)
   overlay: {
