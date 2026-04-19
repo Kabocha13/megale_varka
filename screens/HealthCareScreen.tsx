@@ -65,6 +65,20 @@ function todayString(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+function dateStringFromOffset(daysAgo: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - daysAgo);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// Retroactive entry window — user can fill up to 3 previous days.
+const DATE_PILLS: { offset: number; label: string }[] = [
+  { offset: 0, label: '今日' },
+  { offset: 1, label: '昨日' },
+  { offset: 2, label: '2日前' },
+  { offset: 3, label: '3日前' },
+];
+
 function formatDate(s: string): string {
   const [y, m, d] = s.split('-');
   return `${y}年${parseInt(m, 10)}月${parseInt(d, 10)}日`;
@@ -122,6 +136,7 @@ export default function HealthCareScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [alreadySaved, setAlreadySaved] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(today);
 
   const [mood, setMood] = useState<Mood | null>(null);
   const [symptoms, setSymptoms] = useState<string[]>([]);
@@ -135,6 +150,8 @@ export default function HealthCareScreen() {
   const [activeCalories, setActiveCalories] = useState<number | null>(null);
   const [showTimePicker, setShowTimePicker] = useState<'bed' | 'wake' | null>(null);
   const [tempPickerTime, setTempPickerTime] = useState<Date | null>(null);
+
+  const isRetroactive = selectedDate !== today;
 
   // Slide-up animation: when a record exists for today, the form is pushed
   // off-screen (upwards, curtain-style) revealing the stats view behind it.
@@ -166,8 +183,22 @@ export default function HealthCareScreen() {
     let cancelled = false;
     async function load() {
       setLoading(true);
+      // Reset form to defaults so switching dates doesn't carry stale values.
+      setAlreadySaved(false);
+      setMood(null);
+      setSymptoms([]);
+      setOtherNote('');
+      setAppetite(null);
+      setAlcohol(false);
+      setBedTime(mkBedTime());
+      setWakeTime(mkWakeTime());
+      setSleepSource('manual');
+      setSteps(null);
+      setActiveCalories(null);
       try {
-        if (hkAvailable) {
+        // HealthKit auto-populate only makes sense for today — the service
+        // queries yesterday's activity, which lines up with "today's form".
+        if (hkAvailable && selectedDate === today) {
           const hk = await fetchYesterdayHealthKitData();
           if (!cancelled) {
             if (hk.sleepHours !== null) {
@@ -181,7 +212,7 @@ export default function HealthCareScreen() {
           }
         }
         if (uid) {
-          const snap = await getDoc(doc(db, 'users', uid, 'healthRecords', today));
+          const snap = await getDoc(doc(db, 'users', uid, 'healthRecords', selectedDate));
           if (!cancelled && snap.exists()) {
             const data = snap.data();
             setAlreadySaved(true);
@@ -193,11 +224,16 @@ export default function HealthCareScreen() {
             if (data.bedTime) { setBedTime(strToDate(data.bedTime)); }
             if (data.wakeTime) { setWakeTime(strToDate(data.wakeTime)); }
             if (data.sleepSource) { setSleepSource(data.sleepSource); }
-            if (data.steps !== undefined) { setSteps(data.steps); }
-            if (data.activeCalories !== undefined) { setActiveCalories(data.activeCalories); }
-            // Already recorded today → start in stats view (no animation)
-            slideY.setValue(-screenH);
-            setShowStats(true);
+            if (data.steps !== undefined && data.steps !== null) { setSteps(data.steps); }
+            if (data.activeCalories !== undefined && data.activeCalories !== null) {
+              setActiveCalories(data.activeCalories);
+            }
+            // Today already recorded → start in stats view (no animation).
+            // For past days the user is explicitly editing, so stay in form.
+            if (selectedDate === today) {
+              slideY.setValue(-screenH);
+              setShowStats(true);
+            }
           }
         }
       } catch (_) {
@@ -208,7 +244,7 @@ export default function HealthCareScreen() {
     }
     load();
     return () => { cancelled = true; };
-  }, [uid, today, hkAvailable, slideY, screenH]);
+  }, [uid, today, selectedDate, hkAvailable, slideY, screenH]);
 
   const toggleSymptom = useCallback((sym: string) => {
     setSymptoms(prev =>
@@ -220,14 +256,14 @@ export default function HealthCareScreen() {
   const handleSave = async () => {
     if (!uid) { return; }
     if (!mood) {
-      Alert.alert('今日の調子を選んでください', '5段階の顔文字から選んでください。');
+      Alert.alert('調子を選んでください', '5段階の顔文字から選んでください。');
       return;
     }
     setSaving(true);
     const sleepHours = calcSleepHours(bedTime, wakeTime);
     try {
-      await setDoc(doc(db, 'users', uid, 'healthRecords', today), {
-        date: today,
+      await setDoc(doc(db, 'users', uid, 'healthRecords', selectedDate), {
+        date: selectedDate,
         mood,
         symptoms,
         otherNote: symptoms.includes('その他') ? otherNote : '',
@@ -239,11 +275,19 @@ export default function HealthCareScreen() {
         sleepSource,
         steps,
         activeCalories,
+        isRetroactive,
         updatedAt: serverTimestamp(),
       });
       setAlreadySaved(true);
       setStatsKey(k => k + 1); // force stats refresh next reveal
-      animateFormOut();
+      if (isRetroactive) {
+        // Past-day save: return to today's view. The load effect will slide
+        // up to the stats screen if today is already recorded.
+        Alert.alert('保存しました', `${formatDate(selectedDate)}の記録を保存しました。`);
+        setSelectedDate(today);
+      } else {
+        animateFormOut();
+      }
     } catch (_) {
       Alert.alert('エラー', '保存に失敗しました。再度お試しください。');
     } finally {
@@ -251,7 +295,8 @@ export default function HealthCareScreen() {
     }
   };
 
-  const handleEdit = useCallback(() => {
+  const handleEdit = useCallback((targetDate?: string) => {
+    if (targetDate) { setSelectedDate(targetDate); }
     animateFormIn();
   }, [animateFormIn]);
 
@@ -282,10 +327,39 @@ export default function HealthCareScreen() {
       <View style={s.header}>
         <Text style={s.title}>健康記録</Text>
         <View style={s.headerRight}>
-          <Text style={s.dateText}>{formatDate(today)}</Text>
+          <Text style={s.dateText}>{formatDate(selectedDate)}</Text>
           {alreadySaved && <Text style={s.savedBadge}>✓ 記録済み</Text>}
         </View>
       </View>
+
+      {/* Date pills — up to 3 retroactive days */}
+      <View style={s.datePillRow}>
+        {DATE_PILLS.map(p => {
+          const pillDate = dateStringFromOffset(p.offset);
+          const selected = selectedDate === pillDate;
+          return (
+            <TouchableOpacity
+              key={p.offset}
+              style={[s.datePill, selected && s.datePillSelected]}
+              onPress={() => setSelectedDate(pillDate)}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+            >
+              <Text style={[s.datePillText, selected && s.datePillTextSelected]}>
+                {p.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {isRetroactive && (
+        <View style={s.retroBanner}>
+          <Text style={s.retroBannerText}>
+            遡って記録中です。連続記録には加算されません。
+          </Text>
+        </View>
+      )}
 
       {/* Mood — left=悪い, right=良い */}
       <Text style={s.sectionTitle}>今日の調子</Text>
@@ -572,6 +646,40 @@ const s = StyleSheet.create({
   title: { fontSize: 20, fontWeight: 'bold', color: C.primary },
   dateText: { fontSize: 12, color: C.sub },
   savedBadge: { marginTop: 2, fontSize: 11, color: '#2E7D32', fontWeight: 'bold' },
+
+  datePillRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 8,
+  },
+  datePill: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: C.card,
+  },
+  datePillSelected: {
+    backgroundColor: C.primary,
+    borderColor: C.primary,
+  },
+  datePillText: { fontSize: 12, color: C.sub },
+  datePillTextSelected: { color: '#FFF', fontWeight: 'bold' },
+
+  retroBanner: {
+    backgroundColor: '#FFF6EC',
+    borderColor: '#E8C9A0',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    marginBottom: 8,
+  },
+  retroBannerText: {
+    fontSize: 11,
+    color: '#8A5A1E',
+  },
 
   sectionTitle: {
     fontSize: 12,
