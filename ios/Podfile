@@ -8,9 +8,8 @@ require Pod::Executable.execute_command('node', ['-p',
 platform :ios, min_ios_version_supported
 prepare_react_native_project!
 
-# react-native-health v1.x は New Architecture 非対応のため Legacy Arch を有効にする
+# New Architecture は未有効（他依存のため）。Nitro Modules は legacy でも動作する。
 ENV['RCT_NEW_ARCH_ENABLED'] ||= '0'
-ENV['RCT_REMOVE_LEGACY_ARCH'] = '0'
 
 linkage = ENV['USE_FRAMEWORKS']
 if linkage != nil
@@ -20,7 +19,6 @@ end
 
 target 'megale_varka' do
   config = use_native_modules!
-  pod 'RNAppleHealthKit', :path => '../node_modules/react-native-health', :inhibit_warnings => true
 
   use_react_native!(
     :path => config[:reactNativePath],

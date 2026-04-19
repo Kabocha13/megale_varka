@@ -1,9 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import AppleHealthKit, {
-  HealthInputOptions,
-  HealthKitPermissions,
-  HealthValue,
-} from 'react-native-health';
+import {
+  isHealthDataAvailable,
+  queryCategorySamples,
+  queryStatisticsForQuantity,
+  requestAuthorization,
+} from '@kingstinct/react-native-healthkit';
 import { Platform } from 'react-native';
 
 export interface HealthKitData {
@@ -14,51 +15,15 @@ export interface HealthKitData {
 
 const HK_ASKED_KEY = '@hk_permission_asked';
 
-const PERMISSIONS: HealthKitPermissions = {
-  permissions: {
-    read: [
-      AppleHealthKit.Constants.Permissions.SleepAnalysis,
-      AppleHealthKit.Constants.Permissions.StepCount,
-      AppleHealthKit.Constants.Permissions.ActiveEnergyBurned,
-    ],
-    write: [],
-  },
-};
-
-function normalizeHealthKitError(error: unknown): string {
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  if (typeof error === 'object' && error !== null && 'message' in error) {
-    const message = (error as { message?: unknown }).message;
-    if (typeof message === 'string' && message.length > 0) {
-      return message;
-    }
-  }
-
-  if (typeof error === 'object' && error !== null) {
-    try {
-      return JSON.stringify(error);
-    } catch {
-      return String(error);
-    }
-  }
-
-  return String(error);
-}
-
-function initHealthKit(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    AppleHealthKit.initHealthKit(PERMISSIONS, (error) => {
-      if (error) { reject(new Error(normalizeHealthKitError(error))); }
-      else { resolve(); }
-    });
-  });
-}
+const READ_PERMISSIONS = [
+  'HKQuantityTypeIdentifierStepCount',
+  'HKQuantityTypeIdentifierActiveEnergyBurned',
+  'HKCategoryTypeIdentifierSleepAnalysis',
+] as const;
 
 export function isHealthKitAvailable(): boolean {
-  return Platform.OS === 'ios';
+  if (Platform.OS !== 'ios') { return false; }
+  try { return isHealthDataAvailable(); } catch { return false; }
 }
 
 export async function hasRequestedHealthKit(): Promise<boolean> {
@@ -68,11 +33,11 @@ export async function hasRequestedHealthKit(): Promise<boolean> {
 
 export type HKRequestResult = { ok: true } | { ok: false };
 
-// Shows the HealthKit permission dialog (call only when user explicitly requests)
+// Shows the HealthKit permission dialog. Safe to call repeatedly — iOS only shows once.
 export async function requestHealthKitPermissions(): Promise<HKRequestResult> {
   if (!isHealthKitAvailable()) { return { ok: false }; }
   try {
-    await initHealthKit();
+    await requestAuthorization({ toRead: READ_PERMISSIONS });
     await AsyncStorage.setItem(HK_ASKED_KEY, 'true');
     return { ok: true };
   } catch {
@@ -82,17 +47,11 @@ export async function requestHealthKitPermissions(): Promise<HKRequestResult> {
 
 const EMPTY: HealthKitData = { sleepHours: null, steps: null, activeCalories: null };
 
-// Silently fetches data; won't show permission dialog (call on mount)
+// Silently fetches data; won't show permission dialog. Call on mount.
 export async function fetchTodayHealthKitData(): Promise<HealthKitData> {
   if (!isHealthKitAvailable()) { return EMPTY; }
   const asked = await hasRequestedHealthKit();
   if (!asked) { return EMPTY; }
-
-  try {
-    await initHealthKit();
-  } catch {
-    return EMPTY;
-  }
 
   const now = new Date();
   const startOfDay = new Date(now);
@@ -116,52 +75,40 @@ export async function fetchTodayHealthKitData(): Promise<HealthKitData> {
   };
 }
 
-// HealthKit sleep values: 0=inBed, 1=asleep, 2=awake, 3=asleepCore, 4=asleepDeep, 5=asleepREM
+// HealthKit sleep values: 0=inBed, 1=asleep(legacy), 2=awake, 3=asleepCore, 4=asleepDeep, 5=asleepREM
 const SLEEP_VALUES = new Set([1, 3, 4, 5]);
 
-function getSleepHours(startDate: Date, endDate: Date): Promise<number | null> {
-  return new Promise((resolve) => {
-    const options: HealthInputOptions = {
-      startDate: startDate.toISOString(),
-      endDate: endDate.toISOString(),
-    };
-    AppleHealthKit.getSleepSamples(options, (err, results) => {
-      if (err || !results?.length) { resolve(null); return; }
-      let ms = 0;
-      for (const s of results as HealthValue[]) {
-        if (SLEEP_VALUES.has(s.value)) {
-          ms += new Date(s.endDate).getTime() - new Date(s.startDate).getTime();
-        }
-      }
-      resolve(ms > 0 ? ms / 3_600_000 : null);
-    });
+async function getSleepHours(startDate: Date, endDate: Date): Promise<number | null> {
+  const samples = await queryCategorySamples('HKCategoryTypeIdentifierSleepAnalysis', {
+    filter: { date: { startDate, endDate } },
+    limit: 1000,
   });
+  if (!samples.length) { return null; }
+  let ms = 0;
+  for (const s of samples) {
+    if (SLEEP_VALUES.has(s.value as number)) {
+      ms += s.endDate.getTime() - s.startDate.getTime();
+    }
+  }
+  return ms > 0 ? ms / 3_600_000 : null;
 }
 
-function getStepCount(startDate: Date, endDate: Date): Promise<number | null> {
-  return new Promise((resolve) => {
-    const options: HealthInputOptions = {
-      startDate: startDate.toISOString(),
-      endDate: endDate.toISOString(),
-      includeManuallyAdded: false,
-    };
-    AppleHealthKit.getStepCount(options, (err, result) => {
-      if (err || result == null) { resolve(null); return; }
-      resolve(Math.round((result as HealthValue).value ?? 0));
-    });
-  });
+async function getStepCount(startDate: Date, endDate: Date): Promise<number | null> {
+  const stats = await queryStatisticsForQuantity(
+    'HKQuantityTypeIdentifierStepCount',
+    ['cumulativeSum'],
+    { filter: { date: { startDate, endDate } }, unit: 'count' },
+  );
+  const sum = stats?.sumQuantity?.quantity;
+  return typeof sum === 'number' ? Math.round(sum) : null;
 }
 
-function getActiveCalories(startDate: Date, endDate: Date): Promise<number | null> {
-  return new Promise((resolve) => {
-    const options: HealthInputOptions = {
-      startDate: startDate.toISOString(),
-      endDate: endDate.toISOString(),
-      includeManuallyAdded: false,
-    };
-    AppleHealthKit.getActiveEnergyBurned(options, (err, results) => {
-      if (err || !results?.length) { resolve(null); return; }
-      resolve(Math.round(results.reduce((sum, r) => sum + (r.value ?? 0), 0)));
-    });
-  });
+async function getActiveCalories(startDate: Date, endDate: Date): Promise<number | null> {
+  const stats = await queryStatisticsForQuantity(
+    'HKQuantityTypeIdentifierActiveEnergyBurned',
+    ['cumulativeSum'],
+    { filter: { date: { startDate, endDate } }, unit: 'kcal' },
+  );
+  const sum = stats?.sumQuantity?.quantity;
+  return typeof sum === 'number' ? Math.round(sum) : null;
 }
