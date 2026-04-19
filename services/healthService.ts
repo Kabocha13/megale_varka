@@ -47,25 +47,31 @@ export async function requestHealthKitPermissions(): Promise<HKRequestResult> {
 
 const EMPTY: HealthKitData = { sleepHours: null, steps: null, activeCalories: null };
 
-// Silently fetches data; won't show permission dialog. Call on mount.
-export async function fetchTodayHealthKitData(): Promise<HealthKitData> {
+// Silently fetches yesterday's data; won't show permission dialog. Call on mount.
+export async function fetchYesterdayHealthKitData(): Promise<HealthKitData> {
   if (!isHealthKitAvailable()) { return EMPTY; }
   const asked = await hasRequestedHealthKit();
   if (!asked) { return EMPTY; }
 
   const now = new Date();
-  const startOfDay = new Date(now);
-  startOfDay.setHours(0, 0, 0, 0);
 
-  // Sleep window: yesterday 16:00 → today 12:00 (captures overnight sleep)
-  const sleepEnd = new Date(now);
+  // Yesterday: 00:00 → 23:59:59
+  const startOfYesterday = new Date(now);
+  startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+  startOfYesterday.setHours(0, 0, 0, 0);
+
+  const endOfYesterday = new Date(startOfYesterday);
+  endOfYesterday.setHours(23, 59, 59, 999);
+
+  // Sleep window: 2 days ago 16:00 → yesterday 12:00 (captures overnight sleep)
+  const sleepEnd = new Date(startOfYesterday);
   sleepEnd.setHours(12, 0, 0, 0);
   const sleepStart = new Date(sleepEnd.getTime() - 20 * 60 * 60 * 1000);
 
   const [sleepResult, stepsResult, caloriesResult] = await Promise.allSettled([
     getSleepHours(sleepStart, sleepEnd),
-    getStepCount(startOfDay, now),
-    getActiveCalories(startOfDay, now),
+    getStepCount(startOfYesterday, endOfYesterday),
+    getActiveCalories(startOfYesterday, endOfYesterday),
   ]);
 
   return {
