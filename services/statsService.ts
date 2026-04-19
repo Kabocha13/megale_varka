@@ -18,6 +18,9 @@ export interface HealthRecord {
   sleepSource?: string;
   steps?: number | null;
   activeCalories?: number | null;
+  // true when the user filled this day retroactively (from a later date).
+  // Retroactive entries are included in charts but excluded from the streak.
+  isRetroactive?: boolean;
 }
 
 export interface HealthStats {
@@ -95,8 +98,11 @@ export async function fetchHealthStats(uid: string, days = 30): Promise<HealthSt
   // chronological order (oldest first) for charts
   records.reverse();
 
-  const dateSet = new Set(records.map(r => r.date));
-  const streak = computeStreak(dateSet);
+  // Streak only counts records made on the actual day (not retroactive).
+  const onTimeDates = new Set(
+    records.filter(r => r.isRetroactive !== true).map(r => r.date),
+  );
+  const streak = computeStreak(onTimeDates);
 
   const last7 = records.slice(-7);
 
