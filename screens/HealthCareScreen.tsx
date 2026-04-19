@@ -9,6 +9,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Modal,
   Platform,
   ScrollView,
@@ -184,28 +185,6 @@ export default function HealthCareScreen() {
     );
   }, []);
 
-  const handleConnectHealthKit = async () => {
-    const result = await requestHealthKitPermissions();
-    if (!result.ok) {
-      Alert.alert(
-        'ヘルスケアと連携できませんでした',
-        '設定アプリの「プライバシーとセキュリティ」→「ヘルスケア」から許可してください。',
-      );
-      return;
-    }
-    try {
-      const hk = await fetchTodayHealthKitData();
-      setSteps(hk.steps);
-      setActiveCalories(hk.activeCalories);
-      if (hk.sleepHours !== null) {
-        // `sleepHours` だけでは実際の就寝/起床時刻は復元できないため、
-        // 現在時刻基準の擬似的な bed/wake を作って保存しない。
-        // 睡眠時刻は既存のユーザー入力値を保持する。
-      }
-    } catch (_) {
-      // silently ignore fetch errors after connect
-    }
-  };
 
   const handleSave = async () => {
     if (!uid) { return; }
@@ -385,7 +364,7 @@ export default function HealthCareScreen() {
         </View>
       </View>
 
-      {/* Exercise — always shown; connect button only on iOS when no HealthKit data */}
+      {/* Exercise */}
       <Text style={s.sectionTitle}>運動</Text>
       <View style={s.card}>
         {steps !== null || activeCalories !== null ? (
@@ -406,14 +385,18 @@ export default function HealthCareScreen() {
             </View>
           </>
         ) : hkAvailable ? (
-          <TouchableOpacity style={s.hkConnectBtn} onPress={handleConnectHealthKit}>
-            <Text style={s.hkConnectIcon}>🍎</Text>
-            <View style={s.hkConnectText}>
-              <Text style={s.hkConnectTitle}>ヘルスケアと連携する</Text>
-              <Text style={s.hkConnectSub}>歩数・消費カロリーを自動取得</Text>
-            </View>
-            <Text style={s.hkConnectArrow}>›</Text>
-          </TouchableOpacity>
+          <View style={s.hkOffPrompt}>
+            <Text style={s.hkOffIcon}>🍎</Text>
+            <Text style={s.hkOffTitle}>ヘルスケア連携がオフです</Text>
+            <Text style={s.hkOffSub}>
+              歩数・消費カロリーを表示するには、{'\n'}
+              設定 › プライバシーとセキュリティ › ヘルスケア{'\n'}
+              からこのアプリをオンにしてください。
+            </Text>
+            <TouchableOpacity style={s.hkOffBtn} onPress={() => Linking.openSettings()}>
+              <Text style={s.hkOffBtnText}>設定を開く</Text>
+            </TouchableOpacity>
+          </View>
         ) : (
           <Text style={s.hkUnavailableText}>運動データの連携はiOSのみ利用可能です</Text>
         )}
@@ -623,17 +606,18 @@ const s = StyleSheet.create({
   sleepDurationText: { fontSize: 18, fontWeight: 'bold', color: C.text },
 
   // Exercise
-  hkConnectBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  hkOffPrompt: { alignItems: 'center', paddingVertical: 12, gap: 6 },
+  hkOffIcon: { fontSize: 32, marginBottom: 4 },
+  hkOffTitle: { fontSize: 15, fontWeight: 'bold', color: C.primary },
+  hkOffSub: { fontSize: 12, color: C.sub, textAlign: 'center', lineHeight: 20 },
+  hkOffBtn: {
+    marginTop: 10,
+    backgroundColor: C.primary,
+    paddingHorizontal: 24,
     paddingVertical: 10,
-    gap: 12,
+    borderRadius: 20,
   },
-  hkConnectIcon: { fontSize: 28 },
-  hkConnectText: { flex: 1 },
-  hkConnectTitle: { fontSize: 15, fontWeight: 'bold', color: C.primary },
-  hkConnectSub: { fontSize: 12, color: C.muted, marginTop: 2 },
-  hkConnectArrow: { fontSize: 22, color: C.muted },
+  hkOffBtnText: { color: '#FFF', fontSize: 14, fontWeight: 'bold' },
   hkUnavailableText: { fontSize: 13, color: C.muted, textAlign: 'center', paddingVertical: 8 },
   exerciseRow: {
     flexDirection: 'row',

@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   StatusBar,
   StyleSheet,
   Text,
@@ -18,7 +17,7 @@ import JobSupportScreen from './screens/JobSupportScreen';
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
 import SettingsScreen from './screens/SettingsScreen';
-import { isHealthKitAvailable, requestHealthKitPermissions } from './services/healthService';
+import { requestHealthKitPermissions } from './services/healthService';
 import { requestNotificationPermission } from './services/notifications';
 
 type TabName = 'health_care' | 'job_management' | 'job_support' | 'settings';
@@ -141,22 +140,10 @@ function AppContent() {
 
 function App() {
   useEffect(() => {
+    // Request permissions sequentially so dialogs don't stack
     (async () => {
       await requestNotificationPermission().catch(() => {});
-
-      const available = isHealthKitAvailable();
-      if (!available) {
-        Alert.alert('HK診断', 'isHealthDataAvailable = false (iOSのみ対応)');
-        return;
-      }
-
-      try {
-        const result = await requestHealthKitPermissions();
-        Alert.alert('HK診断', result.ok ? '✅ requestAuthorization 成功' : '❌ requestAuthorization 失敗 (ok=false)');
-      } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : String(e);
-        Alert.alert('HK診断 エラー', msg);
-      }
+      await requestHealthKitPermissions().catch(() => {});
     })();
   }, []);
 
