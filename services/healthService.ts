@@ -25,10 +25,33 @@ const PERMISSIONS: HealthKitPermissions = {
   },
 };
 
+function normalizeHealthKitError(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string' && message.length > 0) {
+      return message;
+    }
+  }
+
+  if (typeof error === 'object' && error !== null) {
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return String(error);
+    }
+  }
+
+  return String(error);
+}
+
 function initHealthKit(): Promise<void> {
   return new Promise((resolve, reject) => {
     AppleHealthKit.initHealthKit(PERMISSIONS, (error) => {
-      if (error) { reject(new Error(error)); }
+      if (error) { reject(new Error(normalizeHealthKitError(error))); }
       else { resolve(); }
     });
   });
