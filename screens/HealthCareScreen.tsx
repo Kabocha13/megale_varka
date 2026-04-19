@@ -92,8 +92,12 @@ function calcSleepHours(bed: Date, wake: Date): number {
 }
 
 function formatDuration(hours: number): string {
-  const h = Math.floor(hours);
-  const m = Math.round((hours - h) * 60);
+  let h = Math.floor(hours);
+  let m = Math.round((hours - h) * 60);
+  if (m === 60) {
+    h += 1;
+    m = 0;
+  }
   return m === 0 ? `${h}時間` : `${h}時間${m}分`;
 }
 
