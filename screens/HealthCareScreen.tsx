@@ -24,7 +24,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { db } from '../firebase/config';
 import {
-  fetchYesterdayHealthKitData,
+  fetchHealthKitDataForDate,
   isHealthKitAvailable,
 } from '../services/healthService';
 import HealthStatsScreen from './HealthStatsScreen';
@@ -196,10 +196,14 @@ export default function HealthCareScreen() {
       setSteps(null);
       setActiveCalories(null);
       try {
-        // HealthKit auto-populate only makes sense for today — the service
-        // queries yesterday's activity, which lines up with "today's form".
-        if (hkAvailable && selectedDate === today) {
-          const hk = await fetchYesterdayHealthKitData();
+        // HealthKit target date:
+        //   - For today's form, today isn't finished yet, so we use yesterday.
+        //   - For retroactive forms, the target day is already complete, so
+        //     we use the selected day itself.
+        const hkTargetDate =
+          selectedDate === today ? dateStringFromOffset(1) : selectedDate;
+        if (hkAvailable) {
+          const hk = await fetchHealthKitDataForDate(hkTargetDate);
           if (!cancelled) {
             if (hk.sleepHours !== null) {
               // `sleepHours` is only a duration and does not provide actual
@@ -501,7 +505,9 @@ export default function HealthCareScreen() {
       <View style={s.card}>
         {steps !== null || activeCalories !== null ? (
           <>
-            <Text style={s.hkBadge}>🍎 昨日のデータ</Text>
+            <Text style={s.hkBadge}>
+              🍎 {isRetroactive ? `${formatDate(selectedDate)}のデータ` : '昨日のデータ'}
+            </Text>
             <View style={s.exerciseRow}>
               <View style={s.exerciseItem}>
                 <Text style={s.exerciseIcon}>👟</Text>

@@ -49,29 +49,36 @@ const EMPTY: HealthKitData = { sleepHours: null, steps: null, activeCalories: nu
 
 // Silently fetches yesterday's data; won't show permission dialog. Call on mount.
 export async function fetchYesterdayHealthKitData(): Promise<HealthKitData> {
+  const y = new Date();
+  y.setDate(y.getDate() - 1);
+  const dateStr = `${y.getFullYear()}-${String(y.getMonth() + 1).padStart(2, '0')}-${String(y.getDate()).padStart(2, '0')}`;
+  return fetchHealthKitDataForDate(dateStr);
+}
+
+/**
+ * Fetches HealthKit data for an arbitrary calendar day (YYYY-MM-DD).
+ * Silent — no permission dialog. Used by the retroactive-entry flow so
+ * past-day forms still show the day's steps / calories / sleep.
+ */
+export async function fetchHealthKitDataForDate(dateStr: string): Promise<HealthKitData> {
   if (!isHealthKitAvailable()) { return EMPTY; }
   const asked = await hasRequestedHealthKit();
   if (!asked) { return EMPTY; }
 
-  const now = new Date();
+  const [y, m, d] = dateStr.split('-').map(Number);
+  // Steps / calories window: the full target day 00:00 → 23:59:59
+  const dayStart = new Date(y, m - 1, d, 0, 0, 0, 0);
+  const dayEnd = new Date(y, m - 1, d, 23, 59, 59, 999);
 
-  // Yesterday: 00:00 → 23:59:59
-  const startOfYesterday = new Date(now);
-  startOfYesterday.setDate(startOfYesterday.getDate() - 1);
-  startOfYesterday.setHours(0, 0, 0, 0);
-
-  const endOfYesterday = new Date(startOfYesterday);
-  endOfYesterday.setHours(23, 59, 59, 999);
-
-  // Sleep window: 2 days ago 16:00 → yesterday 12:00 (captures overnight sleep)
-  const sleepEnd = new Date(startOfYesterday);
-  sleepEnd.setHours(12, 0, 0, 0);
+  // Sleep window: the previous day 16:00 → target day 12:00
+  // (captures the overnight sleep that ended on the morning of the target day)
+  const sleepEnd = new Date(y, m - 1, d, 12, 0, 0, 0);
   const sleepStart = new Date(sleepEnd.getTime() - 20 * 60 * 60 * 1000);
 
   const [sleepResult, stepsResult, caloriesResult] = await Promise.allSettled([
     getSleepHours(sleepStart, sleepEnd),
-    getStepCount(startOfYesterday, endOfYesterday),
-    getActiveCalories(startOfYesterday, endOfYesterday),
+    getStepCount(dayStart, dayEnd),
+    getActiveCalories(dayStart, dayEnd),
   ]);
 
   return {
