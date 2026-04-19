@@ -76,7 +76,10 @@ export async function requestHealthKitPermissions(): Promise<HKRequestResult> {
     await AsyncStorage.setItem(HK_ASKED_KEY, 'true');
     return { ok: true };
   } catch (e) {
-    return { ok: false, reason: String(e) };
+    return {
+      ok: false,
+      reason: e instanceof Error ? e.message : normalizeHealthKitError(e),
+    };
   }
 }
 
