@@ -28,7 +28,7 @@ import {
 
 // --- Types ---
 type Mood = 1 | 2 | 3 | 4 | 5;
-type AppetiteValue = 'full' | 'normal' | 'selective' | 'light' | 'water' | 'nothing';
+type AppetiteValue = 'nothing' | 'water' | 'noodles' | 'set_meal' | 'steak';
 
 // --- Constants ---
 // Left=悪い, right=良い
@@ -50,13 +50,12 @@ const SYMPTOMS = [
   'その他',
 ];
 
-const APPETITE_OPTIONS: { value: AppetiteValue; label: string }[] = [
-  { value: 'full',      label: '全力全開！何でもいける 🍛' },
-  { value: 'normal',    label: '普通に食べられる' },
-  { value: 'selective', label: '好きなものならいける 🍰' },
-  { value: 'light',     label: 'お粥・うどんなら... 🍜' },
-  { value: 'water',     label: '水・お茶ならいける 💧' },
-  { value: 'nothing',   label: '胃も休業中 🙅' },
+const APPETITE_OPTIONS: { value: AppetiteValue; emoji: string; label: string }[] = [
+  { value: 'nothing',  emoji: '🚫', label: '食べれない' },
+  { value: 'water',    emoji: '💧', label: '水' },
+  { value: 'noodles',  emoji: '🍜', label: '麺類' },
+  { value: 'set_meal', emoji: '🍱', label: '定食' },
+  { value: 'steak',    emoji: '🥩', label: 'ステーキ' },
 ];
 
 // --- Helpers ---
@@ -288,24 +287,23 @@ export default function HealthCareScreen() {
       {/* Appetite */}
       <Text style={s.sectionTitle}>食欲</Text>
       <View style={s.card}>
-        {APPETITE_OPTIONS.map((opt, i) => (
-          <TouchableOpacity
-            key={opt.value}
-            style={[
-              s.listOption,
-              appetite === opt.value && s.listOptionSelected,
-              i < APPETITE_OPTIONS.length - 1 && s.listOptionBorder,
-            ]}
-            onPress={() => setAppetite(opt.value)}
-            accessibilityRole="radio"
-            accessibilityState={{ selected: appetite === opt.value }}
-          >
-            <Text style={[s.listOptionText, appetite === opt.value && s.listOptionTextSelected]}>
-              {opt.label}
-            </Text>
-            {appetite === opt.value && <Text style={s.checkmark}>✓</Text>}
-          </TouchableOpacity>
-        ))}
+        <View style={s.appetiteRow}>
+          {APPETITE_OPTIONS.map(opt => (
+            <TouchableOpacity
+              key={opt.value}
+              style={[s.appetiteBtn, appetite === opt.value && s.appetiteBtnSelected]}
+              onPress={() => setAppetite(opt.value)}
+              accessibilityRole="radio"
+              accessibilityLabel={opt.label}
+              accessibilityState={{ selected: appetite === opt.value }}
+            >
+              <Text style={s.appetiteEmoji}>{opt.emoji}</Text>
+              <Text style={[s.appetiteLabel, appetite === opt.value && s.appetiteLabelSelected]}>
+                {opt.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
 
       {/* Alcohol */}
@@ -554,20 +552,18 @@ const s = StyleSheet.create({
   hint: { fontSize: 12, color: C.muted, marginTop: 10 },
 
   // Appetite
-  listOption: {
-    flexDirection: 'row',
+  appetiteRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  appetiteBtn: {
+    flex: 1,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 13,
-    paddingHorizontal: 4,
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginHorizontal: 2,
   },
-  listOptionBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: C.border,
-  },
-  listOptionSelected: { backgroundColor: C.selected, borderRadius: 8, paddingHorizontal: 8 },
-  listOptionText: { fontSize: 15, color: C.text },
-  listOptionTextSelected: { color: C.primary, fontWeight: 'bold' },
+  appetiteBtnSelected: { backgroundColor: C.selected },
+  appetiteEmoji: { fontSize: 28 },
+  appetiteLabel: { fontSize: 9, color: C.muted, marginTop: 4, textAlign: 'center' },
+  appetiteLabelSelected: { color: C.primary, fontWeight: 'bold' },
   checkmark: { fontSize: 16, color: C.primary, fontWeight: 'bold' },
 
   // Alcohol
