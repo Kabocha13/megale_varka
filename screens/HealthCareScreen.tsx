@@ -133,6 +133,7 @@ export default function HealthCareScreen() {
   const [steps, setSteps] = useState<number | null>(null);
   const [activeCalories, setActiveCalories] = useState<number | null>(null);
   const [showTimePicker, setShowTimePicker] = useState<'bed' | 'wake' | null>(null);
+  const [tempPickerTime, setTempPickerTime] = useState<Date | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -360,7 +361,7 @@ export default function HealthCareScreen() {
             <Text style={s.sleepTimeLabel}>就寝</Text>
             <TouchableOpacity
               style={s.sleepTimeBtn}
-              onPress={() => setShowTimePicker('bed')}
+              onPress={() => { setTempPickerTime(bedTime); setShowTimePicker('bed'); }}
             >
               <Text style={s.sleepTimeText}>{formatTime(bedTime)}</Text>
             </TouchableOpacity>
@@ -370,7 +371,7 @@ export default function HealthCareScreen() {
             <Text style={s.sleepTimeLabel}>起床</Text>
             <TouchableOpacity
               style={s.sleepTimeBtn}
-              onPress={() => setShowTimePicker('wake')}
+              onPress={() => { setTempPickerTime(wakeTime); setShowTimePicker('wake'); }}
             >
               <Text style={s.sleepTimeText}>{formatTime(wakeTime)}</Text>
             </TouchableOpacity>
@@ -438,32 +439,36 @@ export default function HealthCareScreen() {
           visible
           transparent
           animationType="slide"
-          onRequestClose={() => setShowTimePicker(null)}
+          onRequestClose={() => { setTempPickerTime(null); setShowTimePicker(null); }}
         >
           <View style={s.overlay}>
             <View style={s.pickerCard}>
               <View style={s.pickerHeader}>
-                <TouchableOpacity onPress={() => setShowTimePicker(null)}>
+                <TouchableOpacity onPress={() => { setTempPickerTime(null); setShowTimePicker(null); }}>
                   <Text style={s.pickerCancelText}>キャンセル</Text>
                 </TouchableOpacity>
                 <Text style={s.pickerTitle}>
                   {showTimePicker === 'bed' ? '就寝時刻' : '起床時刻'}
                 </Text>
-                <TouchableOpacity onPress={() => setShowTimePicker(null)}>
+                <TouchableOpacity onPress={() => {
+                  if (tempPickerTime) {
+                    if (showTimePicker === 'bed') { setBedTime(tempPickerTime); }
+                    else { setWakeTime(tempPickerTime); }
+                    setSleepSource('manual');
+                  }
+                  setTempPickerTime(null);
+                  setShowTimePicker(null);
+                }}>
                   <Text style={s.pickerDoneText}>完了</Text>
                 </TouchableOpacity>
               </View>
               <DateTimePicker
-                value={showTimePicker === 'bed' ? bedTime : wakeTime}
+                value={tempPickerTime ?? (showTimePicker === 'bed' ? bedTime : wakeTime)}
                 mode="time"
                 display="spinner"
                 locale="ja"
                 onChange={(_, date) => {
-                  if (date) {
-                    if (showTimePicker === 'bed') { setBedTime(date); }
-                    else { setWakeTime(date); }
-                    setSleepSource('manual');
-                  }
+                  if (date) { setTempPickerTime(date); }
                 }}
               />
             </View>
