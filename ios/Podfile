@@ -8,8 +8,9 @@ require Pod::Executable.execute_command('node', ['-p',
 platform :ios, min_ios_version_supported
 prepare_react_native_project!
 
-# react-native-health v1.x は New Architecture 非対応のため、未設定時のみ無効化
+# react-native-health v1.x は New Architecture 非対応のため Legacy Arch を有効にする
 ENV['RCT_NEW_ARCH_ENABLED'] ||= '0'
+ENV['RCT_REMOVE_LEGACY_ARCH'] = '0'
 
 linkage = ENV['USE_FRAMEWORKS']
 if linkage != nil
@@ -34,20 +35,5 @@ target 'megale_varka' do
       :mac_catalyst_enabled => false,
       # :ccache_enabled => true
     )
-    # RCT_REMOVE_LEGACY_ARCH=1 is injected by react_native_post_install via GCC_PREPROCESSOR_DEFINITIONS
-    # in the pods xcconfig, which disables RCT_EXPORT_METHOD and breaks react-native-health v1.x.
-    # Override it to 0 by appending to the pod's xcconfig (last definition wins in clang).
-    installer.pods_project.targets.each do |target|
-      next unless target.name == 'RNAppleHealthKit'
-      target.build_configurations.each do |cfg|
-        xcconfig_path = cfg.base_configuration_reference&.real_path
-        next unless xcconfig_path
-        content = File.read(xcconfig_path.to_s)
-        unless content.include?('RCT_REMOVE_LEGACY_ARCH=0')
-          File.write(xcconfig_path.to_s,
-            content + "\nGCC_PREPROCESSOR_DEFINITIONS = $(inherited) RCT_REMOVE_LEGACY_ARCH=0\n")
-        end
-      end
-    end
   end
 end

@@ -20,7 +20,6 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { db } from '../firebase/config';
 import {
-  HKRequestResult,
   fetchTodayHealthKitData,
   isHealthKitAvailable,
   requestHealthKitPermissions,
@@ -182,9 +181,12 @@ export default function HealthCareScreen() {
   }, []);
 
   const handleConnectHealthKit = async () => {
-    const result: HKRequestResult = await requestHealthKitPermissions();
+    const result = await requestHealthKitPermissions();
     if (!result.ok) {
-      Alert.alert('HealthKit エラー', result.reason, [{ text: 'OK' }]);
+      Alert.alert(
+        'ヘルスケアと連携できませんでした',
+        '設定アプリの「プライバシーとセキュリティ」→「ヘルスケア」から許可してください。',
+      );
       return;
     }
     try {
