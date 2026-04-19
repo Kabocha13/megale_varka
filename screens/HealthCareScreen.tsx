@@ -15,6 +15,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -43,10 +44,8 @@ const MOODS: { value: Mood; emoji: string; label: string }[] = [
 const SYMPTOMS = [
   '気分の落ち込み',
   'やる気が出ない',
-  '不安・焦り感',
   '体の重さ・疲れ',
   '集中できない',
-  '孤独感',
   'その他',
 ];
 
@@ -124,6 +123,7 @@ export default function HealthCareScreen() {
 
   const [mood, setMood] = useState<Mood | null>(null);
   const [symptoms, setSymptoms] = useState<string[]>([]);
+  const [otherNote, setOtherNote] = useState('');
   const [appetite, setAppetite] = useState<AppetiteValue | null>(null);
   const [alcohol, setAlcohol] = useState(false);
   const [bedTime, setBedTime] = useState<Date>(mkBedTime);
@@ -159,6 +159,7 @@ export default function HealthCareScreen() {
             setAlreadySaved(true);
             if (data.mood) { setMood(data.mood as Mood); }
             if (data.symptoms) { setSymptoms(data.symptoms); }
+            if (data.otherNote) { setOtherNote(data.otherNote); }
             if (data.appetite) { setAppetite(data.appetite as AppetiteValue); }
             setAlcohol(data.alcohol ?? false);
             if (data.bedTime) { setBedTime(strToDate(data.bedTime)); }
@@ -198,6 +199,7 @@ export default function HealthCareScreen() {
         date: today,
         mood,
         symptoms,
+        otherNote: symptoms.includes('その他') ? otherNote : '',
         appetite,
         alcohol,
         bedTime: timeToStr(bedTime),
@@ -281,6 +283,17 @@ export default function HealthCareScreen() {
         </View>
         {symptoms.length === 0 && (
           <Text style={s.hint}>なければ選択不要です</Text>
+        )}
+        {symptoms.includes('その他') && (
+          <TextInput
+            style={s.otherInput}
+            value={otherNote}
+            onChangeText={setOtherNote}
+            placeholder="その他の症状を入力してください"
+            placeholderTextColor={C.muted}
+            multiline
+            maxLength={200}
+          />
         )}
       </View>
 
@@ -550,6 +563,18 @@ const s = StyleSheet.create({
   tagText: { fontSize: 13, color: C.text },
   tagTextSelected: { color: C.primary, fontWeight: 'bold' },
   hint: { fontSize: 12, color: C.muted, marginTop: 10 },
+  otherInput: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 14,
+    color: C.text,
+    minHeight: 60,
+    textAlignVertical: 'top',
+  },
 
   // Appetite
   appetiteRow: { flexDirection: 'row', justifyContent: 'space-between' },
