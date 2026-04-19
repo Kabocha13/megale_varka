@@ -415,7 +415,7 @@ export default function HealthCareScreen() {
             <Text style={s.hkConnectArrow}>›</Text>
           </TouchableOpacity>
         ) : (
-          <Text style={s.hkUnavailableText}>運動データはiOSのヘルスケアアプリと連携できます</Text>
+          <Text style={s.hkUnavailableText}>運動データの連携はiOSのみ利用可能です</Text>
         )}
       </View>
 
