@@ -21,7 +21,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { db } from '../firebase/config';
 import {
-  fetchTodayHealthKitData,
+  fetchYesterdayHealthKitData,
   isHealthKitAvailable,
 } from '../services/healthService';
 
@@ -138,7 +138,7 @@ export default function HealthCareScreen() {
       setLoading(true);
       try {
         if (hkAvailable) {
-          const hk = await fetchTodayHealthKitData();
+          const hk = await fetchYesterdayHealthKitData();
           if (!cancelled) {
             if (hk.sleepHours !== null) {
               // `sleepHours` is only a duration and does not provide actual
@@ -378,7 +378,7 @@ export default function HealthCareScreen() {
       <View style={s.card}>
         {steps !== null || activeCalories !== null ? (
           <>
-            <Text style={s.hkBadge}>🍎 ヘルスケア連携中</Text>
+            <Text style={s.hkBadge}>🍎 昨日のデータ</Text>
             <View style={s.exerciseRow}>
               <View style={s.exerciseItem}>
                 <Text style={s.exerciseIcon}>👟</Text>
