@@ -385,7 +385,7 @@ export default function HealthCareScreen() {
         </View>
       </View>
 
-      {/* Exercise — always shown; connect button when no HealthKit data */}
+      {/* Exercise — always shown; connect button only on iOS when no HealthKit data */}
       <Text style={s.sectionTitle}>運動</Text>
       <View style={s.card}>
         {steps !== null || activeCalories !== null ? (
@@ -405,7 +405,7 @@ export default function HealthCareScreen() {
               </View>
             </View>
           </>
-        ) : (
+        ) : hkAvailable ? (
           <TouchableOpacity style={s.hkConnectBtn} onPress={handleConnectHealthKit}>
             <Text style={s.hkConnectIcon}>🍎</Text>
             <View style={s.hkConnectText}>
@@ -414,6 +414,8 @@ export default function HealthCareScreen() {
             </View>
             <Text style={s.hkConnectArrow}>›</Text>
           </TouchableOpacity>
+        ) : (
+          <Text style={s.hkUnavailableText}>運動データはiOSのヘルスケアアプリと連携できます</Text>
         )}
       </View>
 
@@ -628,6 +630,7 @@ const s = StyleSheet.create({
   hkConnectTitle: { fontSize: 15, fontWeight: 'bold', color: C.primary },
   hkConnectSub: { fontSize: 12, color: C.muted, marginTop: 2 },
   hkConnectArrow: { fontSize: 22, color: C.muted },
+  hkUnavailableText: { fontSize: 13, color: C.muted, textAlign: 'center', paddingVertical: 8 },
   exerciseRow: {
     flexDirection: 'row',
     alignItems: 'center',
