@@ -80,6 +80,7 @@ const DATE_PILLS: { offset: number; label: string }[] = [
 ];
 
 function formatDate(s: string): string {
+  if (typeof s !== 'string' || !s) { return ''; }
   const [y, m, d] = s.split('-');
   return `${y}年${parseInt(m, 10)}月${parseInt(d, 10)}日`;
 }
@@ -93,8 +94,9 @@ function timeToStr(d: Date): string {
 }
 
 function strToDate(hhmm: string): Date {
-  const [h, m] = hhmm.split(':').map(Number);
   const d = new Date();
+  if (typeof hhmm !== 'string' || !hhmm.includes(':')) { return d; }
+  const [h, m] = hhmm.split(':').map(Number);
   d.setHours(h, m, 0, 0);
   return d;
 }
@@ -299,8 +301,7 @@ export default function HealthCareScreen() {
     }
   };
 
-  const handleEdit = useCallback((targetDate?: string) => {
-    if (targetDate) { setSelectedDate(targetDate); }
+  const handleEdit = useCallback(() => {
     animateFormIn();
   }, [animateFormIn]);
 
