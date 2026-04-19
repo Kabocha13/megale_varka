@@ -66,20 +66,17 @@ export async function hasRequestedHealthKit(): Promise<boolean> {
   return val === 'true';
 }
 
-export type HKRequestResult = { ok: true } | { ok: false; reason: string };
+export type HKRequestResult = { ok: true } | { ok: false };
 
 // Shows the HealthKit permission dialog (call only when user explicitly requests)
 export async function requestHealthKitPermissions(): Promise<HKRequestResult> {
-  if (!isHealthKitAvailable()) { return { ok: false, reason: 'platform not iOS' }; }
+  if (!isHealthKitAvailable()) { return { ok: false }; }
   try {
     await initHealthKit();
     await AsyncStorage.setItem(HK_ASKED_KEY, 'true');
     return { ok: true };
-  } catch (e) {
-    return {
-      ok: false,
-      reason: e instanceof Error ? e.message : normalizeHealthKitError(e),
-    };
+  } catch {
+    return { ok: false };
   }
 }
 
