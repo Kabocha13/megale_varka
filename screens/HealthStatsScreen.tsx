@@ -14,21 +14,7 @@ import { AppetiteValue, fetchHealthStats, HealthStats } from '../services/statsS
 
 interface Props {
   uid: string;
-  // Opens the record form. A specific date (YYYY-MM-DD) can be passed to jump
-  // into a retroactive entry for a past day.
-  onEdit?: (date?: string) => void;
-}
-
-const RETRO_OFFSETS: { offset: number; label: string }[] = [
-  { offset: 1, label: '昨日' },
-  { offset: 2, label: '2日前' },
-  { offset: 3, label: '3日前' },
-];
-
-function dateFromOffset(daysAgo: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - daysAgo);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  onEdit?: () => void;
 }
 
 const APPETITE_META: Record<AppetiteValue, { label: string; emoji: string; color: string }> = {
@@ -117,7 +103,7 @@ export default function HealthStatsScreen({ uid, onEdit }: Props) {
       <View style={s.header}>
         <Text style={s.title}>健康統計</Text>
         {onEdit && (
-          <TouchableOpacity onPress={() => onEdit()} style={s.editBtn}>
+          <TouchableOpacity onPress={onEdit} style={s.editBtn}>
             <Text style={s.editBtnText}>記録を編集</Text>
           </TouchableOpacity>
         )}
@@ -248,37 +234,6 @@ export default function HealthStatsScreen({ uid, onEdit }: Props) {
         </View>
       </View>
 
-      {/* Retroactive entry */}
-      <Text style={s.sectionTitle}>過去の記録を追加</Text>
-      <View style={s.card}>
-        <Text style={s.retroHint}>
-          連続記録には加算されませんが、3日前まで遡って記録できます。
-        </Text>
-        <View style={s.retroRow}>
-          {RETRO_OFFSETS.map(r => {
-            const dateStr = dateFromOffset(r.offset);
-            const record = stats.records.find(x => x.date === dateStr);
-            const has = !!record;
-            return (
-              <TouchableOpacity
-                key={r.offset}
-                style={[s.retroBtn, has && s.retroBtnHas]}
-                onPress={() => onEdit?.(dateStr)}
-                accessibilityRole="button"
-                accessibilityLabel={`${r.label}の記録を${has ? '編集' : '追加'}`}
-              >
-                <Text style={[s.retroBtnLabel, has && s.retroBtnLabelHas]}>
-                  {r.label}
-                </Text>
-                <Text style={[s.retroBtnState, has && s.retroBtnStateHas]}>
-                  {has ? '記録済み' : '未記録'}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </View>
-
       <View style={s.bottomPad} />
     </ScrollView>
   );
@@ -394,45 +349,6 @@ const s = StyleSheet.create({
   alcoholValue: { fontSize: 22, fontWeight: 'bold', color: C.primary },
   alcoholLabel: { fontSize: 10, color: C.muted, marginTop: 2 },
   alcoholDivider: { fontSize: 20, color: C.muted },
-
-  retroHint: {
-    fontSize: 11,
-    color: C.sub,
-    marginBottom: 8,
-  },
-  retroRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  retroBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    alignItems: 'center',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: C.border,
-    backgroundColor: '#FAFAFA',
-  },
-  retroBtnHas: {
-    backgroundColor: C.selected,
-    borderColor: C.primary,
-  },
-  retroBtnLabel: {
-    fontSize: 13,
-    fontWeight: 'bold',
-    color: C.sub,
-  },
-  retroBtnLabelHas: {
-    color: C.primary,
-  },
-  retroBtnState: {
-    fontSize: 10,
-    color: C.muted,
-    marginTop: 2,
-  },
-  retroBtnStateHas: {
-    color: '#2E7D32',
-  },
 
   bottomPad: { height: 24 },
 });
