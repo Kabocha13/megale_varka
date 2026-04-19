@@ -5,10 +5,13 @@ import {
   serverTimestamp,
   setDoc,
 } from 'firebase/firestore';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
+  Dimensions,
+  Easing,
   Modal,
   Platform,
   ScrollView,
@@ -24,6 +27,7 @@ import {
   fetchYesterdayHealthKitData,
   isHealthKitAvailable,
 } from '../services/healthService';
+import HealthStatsScreen from './HealthStatsScreen';
 
 // --- Types ---
 type Mood = 1 | 2 | 3 | 4 | 5;
@@ -132,6 +136,32 @@ export default function HealthCareScreen() {
   const [showTimePicker, setShowTimePicker] = useState<'bed' | 'wake' | null>(null);
   const [tempPickerTime, setTempPickerTime] = useState<Date | null>(null);
 
+  // Slide-up animation: when a record exists for today, the form is pushed
+  // off-screen (upwards, curtain-style) revealing the stats view behind it.
+  const screenH = Dimensions.get('window').height;
+  const slideY = useRef(new Animated.Value(0)).current;
+  const [showStats, setShowStats] = useState(false);
+  const [statsKey, setStatsKey] = useState(0); // remount to refresh after edit-save
+
+  const animateFormOut = useCallback(() => {
+    setShowStats(true);
+    Animated.timing(slideY, {
+      toValue: -screenH,
+      duration: 520,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [slideY, screenH]);
+
+  const animateFormIn = useCallback(() => {
+    Animated.timing(slideY, {
+      toValue: 0,
+      duration: 360,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start(() => setShowStats(false));
+  }, [slideY]);
+
   useEffect(() => {
     let cancelled = false;
     async function load() {
@@ -165,6 +195,9 @@ export default function HealthCareScreen() {
             if (data.sleepSource) { setSleepSource(data.sleepSource); }
             if (data.steps !== undefined) { setSteps(data.steps); }
             if (data.activeCalories !== undefined) { setActiveCalories(data.activeCalories); }
+            // Already recorded today → start in stats view (no animation)
+            slideY.setValue(-screenH);
+            setShowStats(true);
           }
         }
       } catch (_) {
@@ -175,7 +208,7 @@ export default function HealthCareScreen() {
     }
     load();
     return () => { cancelled = true; };
-  }, [uid, today, hkAvailable]);
+  }, [uid, today, hkAvailable, slideY, screenH]);
 
   const toggleSymptom = useCallback((sym: string) => {
     setSymptoms(prev =>
@@ -209,13 +242,18 @@ export default function HealthCareScreen() {
         updatedAt: serverTimestamp(),
       });
       setAlreadySaved(true);
-      Alert.alert('保存しました', '今日の健康記録を保存しました。');
+      setStatsKey(k => k + 1); // force stats refresh next reveal
+      animateFormOut();
     } catch (_) {
       Alert.alert('エラー', '保存に失敗しました。再度お試しください。');
     } finally {
       setSaving(false);
     }
   };
+
+  const handleEdit = useCallback(() => {
+    animateFormIn();
+  }, [animateFormIn]);
 
   const sleepDuration = calcSleepHours(bedTime, wakeTime);
 
@@ -228,7 +266,18 @@ export default function HealthCareScreen() {
   }
 
   return (
-    <ScrollView style={s.container} contentContainerStyle={s.content}>
+    <View style={s.container}>
+      {/* Stats view lives behind the form; mounted lazily to save work. */}
+      {showStats && uid && (
+        <View style={s.statsLayer}>
+          <HealthStatsScreen key={statsKey} uid={uid} onEdit={handleEdit} />
+        </View>
+      )}
+
+      <Animated.View
+        style={[s.formLayer, { transform: [{ translateY: slideY }] }]}
+      >
+        <ScrollView style={s.container} contentContainerStyle={s.content}>
       {/* Header */}
       <View style={s.header}>
         <Text style={s.title}>健康記録</Text>
@@ -480,7 +529,9 @@ export default function HealthCareScreen() {
           }}
         />
       )}
-    </ScrollView>
+        </ScrollView>
+      </Animated.View>
+    </View>
   );
 }
 
@@ -500,6 +551,16 @@ const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
   center: { justifyContent: 'center', alignItems: 'center' },
   content: { padding: 14, paddingBottom: 16 },
+
+  statsLayer: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+  },
+  formLayer: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: C.bg,
+  },
 
   header: {
     flexDirection: 'row',
