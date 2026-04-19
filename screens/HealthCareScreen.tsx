@@ -451,7 +451,7 @@ export default function HealthCareScreen() {
                   {showTimePicker === 'bed' ? '就寝時刻' : '起床時刻'}
                 </Text>
                 <TouchableOpacity onPress={() => {
-                  if (tempPickerTime) {
+                  if (tempPickerTime !== null) {
                     if (showTimePicker === 'bed') { setBedTime(tempPickerTime); }
                     else { setWakeTime(tempPickerTime); }
                     setSleepSource('manual');
