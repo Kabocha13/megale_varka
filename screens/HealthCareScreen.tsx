@@ -323,14 +323,6 @@ export default function HealthCareScreen() {
 
   const sleepDuration = calcSleepHours(bedTime, wakeTime);
 
-  if (loading) {
-    return (
-      <View style={[s.container, s.center]}>
-        <ActivityIndicator size="large" color={C.primary} />
-      </View>
-    );
-  }
-
   return (
     <View style={s.container}>
       {/* Stats view lives behind the form; mounted lazily to save work. */}
@@ -343,6 +335,11 @@ export default function HealthCareScreen() {
       <Animated.View
         style={[s.formLayer, { transform: [{ translateY: slideY }] }]}
       >
+        {loading && (
+          <View style={s.loadingOverlay}>
+            <ActivityIndicator size="large" color={C.primary} />
+          </View>
+        )}
         <ScrollView style={s.container} contentContainerStyle={s.content}>
       {/* Header */}
       <View style={s.header}>
@@ -667,6 +664,14 @@ const s = StyleSheet.create({
     position: 'absolute',
     top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: C.bg,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: C.bg,
+    zIndex: 10,
   },
 
   header: {
