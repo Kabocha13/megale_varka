@@ -161,6 +161,12 @@ export default function HealthCareScreen() {
   const slideY = useRef(new Animated.Value(0)).current;
   const [showStats, setShowStats] = useState(false);
   const [statsKey, setStatsKey] = useState(0); // remount to refresh after edit-save
+  // True once any record (today or past) has been seen / saved — gates
+  // visibility of the back-to-stats button.
+  const [statsAvailable, setStatsAvailable] = useState(false);
+  // Auto-slide to stats only on the very first load. Subsequent date-pill
+  // changes should NOT pull the user back to stats.
+  const initialLoadDoneRef = useRef(false);
 
   const animateFormOut = useCallback(() => {
     setShowStats(true);
@@ -221,6 +227,7 @@ export default function HealthCareScreen() {
           if (!cancelled && snap.exists()) {
             const data = snap.data();
             setAlreadySaved(true);
+            setStatsAvailable(true);
             if (data.mood) { setMood(data.mood as Mood); }
             if (data.symptoms) { setSymptoms(data.symptoms); }
             if (data.otherNote) { setOtherNote(data.otherNote); }
@@ -233,9 +240,10 @@ export default function HealthCareScreen() {
             if (data.activeCalories !== undefined && data.activeCalories !== null) {
               setActiveCalories(data.activeCalories);
             }
-            // Today already recorded → start in stats view (no animation).
-            // For past days the user is explicitly editing, so stay in form.
-            if (selectedDate === today) {
+            // Initial mount only: if today is already recorded, start in
+            // stats view. Subsequent date-pill changes must NOT pull the
+            // user back to stats.
+            if (selectedDate === today && !initialLoadDoneRef.current) {
               slideY.setValue(-screenH);
               setShowStats(true);
             }
@@ -244,7 +252,10 @@ export default function HealthCareScreen() {
       } catch (_) {
         // silently ignore load errors
       } finally {
-        if (!cancelled) { setLoading(false); }
+        if (!cancelled) {
+          setLoading(false);
+          initialLoadDoneRef.current = true;
+        }
       }
     }
     load();
@@ -284,6 +295,7 @@ export default function HealthCareScreen() {
         updatedAt: serverTimestamp(),
       });
       setAlreadySaved(true);
+      setStatsAvailable(true);
       setStatsKey(k => k + 1); // force stats refresh next reveal
       if (isRetroactive) {
         // Past-day save: return to today's view. The load effect will slide
@@ -339,7 +351,7 @@ export default function HealthCareScreen() {
           <Text style={s.dateText}>{formatDate(selectedDate)}</Text>
           {alreadySaved && <Text style={s.savedBadge}>✓ 記録済み</Text>}
         </View>
-        {isRetroactive && (
+        {statsAvailable && (
           <TouchableOpacity
             style={s.backBtn}
             onPress={handleBack}
