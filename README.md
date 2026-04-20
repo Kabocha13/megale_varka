@@ -1,122 +1,79 @@
-# 作業方法
+from weasyprint import HTML
 
-## 2回目以降作業開始時
+# Content for the README.txt
+readme_content = """# megale_varka プロジェクト README
 
+このリポジトリは React Native を使用したモバイルアプリケーションの開発用プロジェクトです。
+
+## 1. 開発の始め方（2回目以降の作業）
+
+作業を開始する際は、常に最新のソースコードを取得し、自身の作業用ブランチに切り替えてから進めてください。
+
+### ディレクトリの移動と最新化
 cd Desktop/megale_varka
-
+git checkout main
 git pull origin main
 
+### 作業ブランチの準備
 git checkout feature/アカウント名
+git merge main
 
-npx react-native run-ios
+---
 
-## 保存方法
+## 2. アプリの起動方法
 
-git add .
-
-git commit -m "変更内容のメモ”
-
-GithubでPull Requestを作成する
-
-git push origin feature/アカウント名
-
-(下田に連絡)
-
-
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
-
-# Getting Started
-
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
-
-## Step 1: Start Metro
-
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
-
-To start the Metro dev server, run the following command from the root of your React Native project:
-
-```sh
-# Using npm
+### Step 1: Metro（ビルドツール）の起動
+JavaScriptのビルドを行うため、まず以下のコマンドを実行して待機させます。
 npm start
+# または yarn start
 
-# OR using Yarn
-yarn start
-```
+### Step 2: シミュレーターで実行
+新しいターミナルウィンドウを開き、以下のコマンドを実行します。
 
-## Step 2: Build and run your app
-
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
-
-### Android
-
-```sh
-# Using npm
-npm run android
-
-# OR using Yarn
-yarn android
-```
-
-### iOS
-
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
-
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
-
-```sh
+#### iOSの場合
+※初回実行時や、ライブラリを追加した後は CocoaPods のインストールが必要です。
 bundle install
-```
-
-Then, and every time you update your native dependencies, run:
-
-```sh
 bundle exec pod install
-```
-
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
-
-```sh
-# Using npm
 npm run ios
 
-# OR using Yarn
-yarn ios
-```
+#### Androidの場合
+npm run android
 
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
+---
 
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
+## 3. 作業の保存と提出（コミット・プッシュ）
 
-## Step 3: Modify your app
+作業が一段落したら、以下の手順で変更を GitHub に反映させてください。
 
-Now that you have successfully run the app, let's make changes!
+1. 変更をステージング
+   git add .
 
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
+2. ローカルに保存
+   git commit -m "変更内容の簡潔な説明（例：〇〇画面のボタン配置修正）"
 
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
+3. GitHubへ送信
+   git push origin feature/アカウント名
 
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
+4. プルリクエストの作成
+   GitHubのWebサイトから「Pull Request」を作成してください。
 
-## Congratulations! :tada:
+5. 完了連絡
+   PR作成後、下田まで連絡をお願いします。
 
-You've successfully run and modified your React Native App. :partying_face:
+---
 
-### Now what?
+## 4. 開発中の便利な操作
 
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
+### Fast Refresh（自動反映）
+App.tsx などのファイルを編集して保存すると、アプリに即座に変更が反映されます。
 
-# Troubleshooting
+### 強制リロード
+アプリの状態をリセットして再読み込みしたい場合：
+・iOS：シミュレーター上で「R」キーを押す。
+・Android：「R」キーを2回叩く、または Cmd/Ctrl + M でデバッグメニューを開き "Reload" を選択。
 
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
+---
 
-# Learn More
-
-To learn more about React Native, take a look at the following resources:
-
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+## 5. 困ったときは
+セットアップやビルドでエラーが出る場合は、以下の公式ガイドを参照してください。
+https://reactnative.dev/docs/troubleshooting
