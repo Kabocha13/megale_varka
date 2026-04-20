@@ -1,79 +1,87 @@
-from weasyprint import HTML
+# megale_varka
 
-# Content for the README.txt
-readme_content = """# megale_varka プロジェクト README
+健康管理と就職支援を統合した React Native モバイルアプリケーションです。
 
-このリポジトリは React Native を使用したモバイルアプリケーションの開発用プロジェクトです。
+## 機能
 
-## 1. 開発の始め方（2回目以降の作業）
+- **ヘルスケア** — HealthKit 連携による健康データの記録・可視化
+- **求人管理** — 求人情報の閲覧・管理
+- **就職支援** — 就職活動のサポートチャット
+- **通知** — Notifee を利用したプッシュ通知
+- **認証** — Firebase による会員登録・ログイン・パスワードリセット
 
-作業を開始する際は、常に最新のソースコードを取得し、自身の作業用ブランチに切り替えてから進めてください。
+## 必要環境
 
-### ディレクトリの移動と最新化
-cd Desktop/megale_varka
+| ツール | バージョン |
+|--------|-----------|
+| Node.js | >= 22.11.0 |
+| React Native | 0.85.1 |
+| Ruby (iOS) | Gemfile 準拠 |
+| Xcode (iOS) | 最新安定版 |
+| Android Studio (Android) | 最新安定版 |
+
+## セットアップ
+
+```bash
+# 依存パッケージのインストール
+npm install
+
+# iOS のみ: CocoaPods のインストール
+bundle install
+bundle exec pod install
+```
+
+## 起動方法
+
+**Step 1: Metro バンドラーを起動する**
+
+```bash
+npm start
+```
+
+**Step 2: 別のターミナルでシミュレーター/エミュレーターを起動する**
+
+```bash
+# iOS
+npm run ios
+
+# Android
+npm run android
+```
+
+## 開発ワークフロー
+
+```bash
+# 最新の main を取り込む
 git checkout main
 git pull origin main
 
-### 作業ブランチの準備
-git checkout feature/アカウント名
+# 作業ブランチへ切り替え・マージ
+git checkout feature/<アカウント名>
 git merge main
 
----
+# 変更をコミット & プッシュ
+git add .
+git commit -m "変更内容の簡潔な説明"
+git push origin feature/<アカウント名>
+```
 
-## 2. アプリの起動方法
+その後、GitHub 上でプルリクエストを作成してください。
 
-### Step 1: Metro（ビルドツール）の起動
-JavaScriptのビルドを行うため、まず以下のコマンドを実行して待機させます。
-npm start
-# または yarn start
+## テスト・リント
 
-### Step 2: シミュレーターで実行
-新しいターミナルウィンドウを開き、以下のコマンドを実行します。
+```bash
+npm test   # Jest によるユニットテスト
+npm run lint  # ESLint
+```
 
-#### iOSの場合
-※初回実行時や、ライブラリを追加した後は CocoaPods のインストールが必要です。
-bundle install
-bundle exec pod install
-npm run ios
+## 便利な操作
 
-#### Androidの場合
-npm run android
+| 操作 | iOS | Android |
+|------|-----|---------|
+| 強制リロード | `R` キー | `R` × 2 または `Cmd/Ctrl+M` → Reload |
+| Fast Refresh | ファイル保存で自動反映 | ファイル保存で自動反映 |
 
----
+## トラブルシューティング
 
-## 3. 作業の保存と提出（コミット・プッシュ）
-
-作業が一段落したら、以下の手順で変更を GitHub に反映させてください。
-
-1. 変更をステージング
-   git add .
-
-2. ローカルに保存
-   git commit -m "変更内容の簡潔な説明（例：〇〇画面のボタン配置修正）"
-
-3. GitHubへ送信
-   git push origin feature/アカウント名
-
-4. プルリクエストの作成
-   GitHubのWebサイトから「Pull Request」を作成してください。
-
-5. 完了連絡
-   PR作成後、下田まで連絡をお願いします。
-
----
-
-## 4. 開発中の便利な操作
-
-### Fast Refresh（自動反映）
-App.tsx などのファイルを編集して保存すると、アプリに即座に変更が反映されます。
-
-### 強制リロード
-アプリの状態をリセットして再読み込みしたい場合：
-・iOS：シミュレーター上で「R」キーを押す。
-・Android：「R」キーを2回叩く、または Cmd/Ctrl + M でデバッグメニューを開き "Reload" を選択。
-
----
-
-## 5. 困ったときは
-セットアップやビルドでエラーが出る場合は、以下の公式ガイドを参照してください。
-https://reactnative.dev/docs/troubleshooting
+ビルドや起動でエラーが発生した場合は [React Native 公式ガイド](https://reactnative.dev/docs/troubleshooting) を参照してください。
