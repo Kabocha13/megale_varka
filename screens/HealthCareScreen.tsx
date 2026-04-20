@@ -207,10 +207,9 @@ export default function HealthCareScreen() {
         if (hkAvailable) {
           const hk = await fetchHealthKitDataForDate(hkTargetDate);
           if (!cancelled) {
-            if (hk.sleepHours !== null) {
-              // `sleepHours` is only a duration and does not provide actual
-              // bed/wake timestamps. Keep the current/default times unchanged
-              // unless real start/end timestamps are available.
+            if (hk.sleepStart && hk.sleepEnd) {
+              setBedTime(hk.sleepStart);
+              setWakeTime(hk.sleepEnd);
               setSleepSource('healthkit');
             }
             setSteps(hk.steps);
