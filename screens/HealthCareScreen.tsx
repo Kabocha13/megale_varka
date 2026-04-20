@@ -32,6 +32,7 @@ import HealthStatsScreen from './HealthStatsScreen';
 // --- Types ---
 type Mood = 1 | 2 | 3 | 4 | 5;
 type AppetiteValue = 'nothing' | 'water' | 'noodles' | 'set_meal' | 'steak';
+type DailyAnswer = 'none' | 'little' | 'some' | 'always';
 
 // --- Constants ---
 // Left=悪い, right=良い
@@ -58,6 +59,47 @@ const APPETITE_OPTIONS: { value: AppetiteValue; emoji: string; label: string }[]
   { value: 'set_meal', emoji: '🍱', label: '定食' },
   { value: 'steak',    emoji: '🥩', label: 'ステーキ' },
 ];
+
+// CES-D style daily check-in questions. One is shown per day, deterministically
+// selected from the date so the question is stable within the same day.
+const DAILY_QUESTIONS: string[] = [
+  '普段は何でもないことが煩わしいと思う',
+  '食べたくない、食欲が落ちたと思う',
+  '家族や友達から励まされても気が晴れない',
+  '他人と同じ程度には能力があると思う',
+  '物事に集中できない',
+  'ゆううつだと感じる',
+  '何をするのも面倒だと感じる',
+  'これからのことを積極的に考えられる',
+  '過去のことについてくよくよ考える',
+  '何か恐ろしい気持ちがする',
+  'なかなか眠れない',
+  '生活について不満なく過ごせている',
+  '普段より口数が少ない',
+  'ひとりぼっちで寂しい',
+  'みながよそよそしいと感じる',
+  '毎日が楽しいと感じる',
+  '急に泣き出したくなる',
+  '悲しいと感じる',
+  'みなが自分を嫌っていると感じる',
+  '仕事や勉強が手につかない',
+];
+
+const DAILY_ANSWER_OPTIONS: { value: DailyAnswer; label: string }[] = [
+  { value: 'none',   label: '全くない' },
+  { value: 'little', label: '少しある' },
+  { value: 'some',   label: 'かなりある' },
+  { value: 'always', label: 'いつもある' },
+];
+
+function dailyQuestionIndex(dateStr: string): number {
+  // Hash the date string so the rotation isn't a simple last-digit pattern.
+  let h = 0;
+  for (let i = 0; i < dateStr.length; i++) {
+    h = (h * 31 + dateStr.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h) % DAILY_QUESTIONS.length;
+}
 
 // --- Helpers ---
 function todayString(): string {
@@ -152,6 +194,10 @@ export default function HealthCareScreen() {
   const [activeCalories, setActiveCalories] = useState<number | null>(null);
   const [showTimePicker, setShowTimePicker] = useState<'bed' | 'wake' | null>(null);
   const [tempPickerTime, setTempPickerTime] = useState<Date | null>(null);
+  const [dailyAnswer, setDailyAnswer] = useState<DailyAnswer | null>(null);
+  const [showAnswerPicker, setShowAnswerPicker] = useState(false);
+
+  const dailyQuestion = DAILY_QUESTIONS[dailyQuestionIndex(selectedDate)];
 
   const isRetroactive = selectedDate !== today;
 
@@ -203,6 +249,7 @@ export default function HealthCareScreen() {
       setSleepSource('manual');
       setSteps(null);
       setActiveCalories(null);
+      setDailyAnswer(null);
       try {
         // HealthKit target date:
         //   - For today's form, today isn't finished yet, so we use yesterday.
@@ -240,6 +287,7 @@ export default function HealthCareScreen() {
             if (data.activeCalories !== undefined && data.activeCalories !== null) {
               setActiveCalories(data.activeCalories);
             }
+            if (data.dailyAnswer) { setDailyAnswer(data.dailyAnswer as DailyAnswer); }
             // Initial mount only: if today is already recorded, start in
             // stats view. Subsequent date-pill changes must NOT pull the
             // user back to stats.
@@ -291,6 +339,8 @@ export default function HealthCareScreen() {
         sleepSource,
         steps,
         activeCalories,
+        dailyQuestion,
+        dailyAnswer,
         isRetroactive,
         updatedAt: serverTimestamp(),
       });
@@ -444,6 +494,28 @@ export default function HealthCareScreen() {
             maxLength={200}
           />
         )}
+      </View>
+
+      {/* Daily rotating check-in question */}
+      <Text style={s.sectionTitle}>今日の一問</Text>
+      <View style={s.card}>
+        <Text style={s.questionText}>Q. {dailyQuestion}</Text>
+        <TouchableOpacity
+          style={s.dropdown}
+          onPress={() => setShowAnswerPicker(true)}
+          accessibilityRole="button"
+          accessibilityLabel="回答を選択"
+        >
+          <Text style={[
+            s.dropdownText,
+            !dailyAnswer && s.dropdownPlaceholder,
+          ]}>
+            {dailyAnswer
+              ? DAILY_ANSWER_OPTIONS.find(o => o.value === dailyAnswer)?.label
+              : '選択してください'}
+          </Text>
+          <Text style={s.dropdownArrow}>▼</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Appetite */}
@@ -633,6 +705,46 @@ export default function HealthCareScreen() {
           }}
         />
       )}
+
+      {/* Answer pulldown — simple bottom sheet with the 4 choices */}
+      {showAnswerPicker && (
+        <Modal
+          visible
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowAnswerPicker(false)}
+        >
+          <TouchableOpacity
+            style={s.answerOverlay}
+            activeOpacity={1}
+            onPress={() => setShowAnswerPicker(false)}
+          >
+            <View style={s.answerSheet}>
+              <Text style={s.answerSheetTitle}>回答を選択</Text>
+              {DAILY_ANSWER_OPTIONS.map(opt => {
+                const selected = dailyAnswer === opt.value;
+                return (
+                  <TouchableOpacity
+                    key={opt.value}
+                    style={[s.answerOption, selected && s.answerOptionSelected]}
+                    onPress={() => {
+                      setDailyAnswer(opt.value);
+                      setShowAnswerPicker(false);
+                    }}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected }}
+                  >
+                    <Text style={[s.answerOptionText, selected && s.answerOptionTextSelected]}>
+                      {opt.label}
+                    </Text>
+                    {selected && <Text style={s.answerCheck}>✓</Text>}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </TouchableOpacity>
+        </Modal>
+      )}
         </ScrollView>
       </Animated.View>
     </View>
@@ -785,6 +897,63 @@ const s = StyleSheet.create({
     minHeight: 50,
     textAlignVertical: 'top',
   },
+
+  // Daily question
+  questionText: {
+    fontSize: 13,
+    color: C.text,
+    lineHeight: 19,
+    marginBottom: 8,
+  },
+  dropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: '#FAFAFA',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  dropdownText: { fontSize: 14, color: C.text },
+  dropdownPlaceholder: { color: C.muted },
+  dropdownArrow: { fontSize: 10, color: C.sub, marginLeft: 8 },
+
+  answerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  answerSheet: {
+    backgroundColor: C.card,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingVertical: 10,
+    paddingBottom: 24,
+  },
+  answerSheetTitle: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: C.sub,
+    textAlign: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: C.border,
+  },
+  answerOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: C.border,
+  },
+  answerOptionSelected: { backgroundColor: C.selected },
+  answerOptionText: { fontSize: 15, color: C.text },
+  answerOptionTextSelected: { color: C.primary, fontWeight: 'bold' },
+  answerCheck: { fontSize: 15, color: C.primary, fontWeight: 'bold' },
 
   // Appetite
   appetiteRow: { flexDirection: 'row', justifyContent: 'space-between' },
