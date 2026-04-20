@@ -177,69 +177,10 @@ def generate(out_path, width, height):
     draw.rectangle([hull_left, hull_top + 4 * sc, hull_right, ship_bottom - 26 * sc],
                    fill=C["hull"] + (255,))
 
-    # ── 8. Text block ─────────────────────────────────────────────────────────
-    text_bottom = height - (SEA_HEIGHT + 110) * sc  # bottom: SEA_HEIGHT+110=220
-
-    # Try to load a font; fall back to Pillow's default if not found.
-    title_size  = int(34 * sc)
-    credit_size = int(11 * sc)
-
-    font_candidates = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSerif-BoldItalic.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSerif-BoldItalic.ttf",
-        "/usr/share/fonts/truetype/freefont/FreeSerifBoldItalic.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf",
-    ]
-    credit_candidates = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf",
-        "/usr/share/fonts/truetype/freefont/FreeSerif.ttf",
-    ]
-
-    title_font  = None
-    credit_font = None
-    for f in font_candidates:
-        if os.path.exists(f):
-            title_font = ImageFont.truetype(f, title_size)
-            break
-    for f in credit_candidates:
-        if os.path.exists(f):
-            credit_font = ImageFont.truetype(f, credit_size)
-            break
-
-    if title_font is None:
-        title_font  = ImageFont.load_default(size=title_size)
-    if credit_font is None:
-        credit_font = ImageFont.load_default(size=credit_size)
-
-    lines = [
-        ("megálē várka",        title_font,  C["text"],      True),
-        ("Powered by React Native", credit_font, C["textMuted"], False),
-        ("Created by IssaShimoda",  credit_font, C["textMuted"], False),
-    ]
-
-    # Measure total block height (bottom-up layout from text_bottom)
-    line_heights = []
-    for text, font, _, _ in lines:
-        bb = draw.textbbox((0, 0), text, font=font)
-        line_heights.append(bb[3] - bb[1])
-
-    gap_after_title  = int(10 * sc)
-    gap_between_cred = int(2 * sc)
-    total_h = (line_heights[0] + gap_after_title
-               + line_heights[1] + gap_between_cred + line_heights[2])
-
-    y = text_bottom - total_h
-    for idx, (text, font, color, _) in enumerate(lines):
-        bb = draw.textbbox((0, 0), text, font=font)
-        tw = bb[2] - bb[0]
-        tx = (width - tw) / 2 - bb[0]
-        draw.text((tx, y - bb[1]), text, font=font, fill=color + (255,))
-        y += line_heights[idx]
-        if idx == 0:
-            y += gap_after_title
-        else:
-            y += gap_between_cred
+    # ── Text block は描画しない ────────────────────────────────────────────────
+    # SplashScreen.tsx でテキストは 220ms 遅れてフェードインするため、
+    # アニメーション開始時点（第1フレーム）では非表示。
+    # ローンチ画面→アニメーションのシームレスな接続のためテキストを除外。
 
     # ── Save ──────────────────────────────────────────────────────────────────
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
