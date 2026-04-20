@@ -30,6 +30,7 @@ const C = {
 };
 
 const SCREEN_W = Dimensions.get('window').width;
+const SCREEN_H = Dimensions.get('window').height;
 
 export default function SplashScreen({ onDone, durationMs = 1500 }: Props) {
   // Fade controllers
@@ -229,7 +230,8 @@ const styles = StyleSheet.create({
   inner: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
+    paddingTop: SCREEN_H * 0.13,
   },
 
   // Sun
@@ -351,7 +353,7 @@ const styles = StyleSheet.create({
   // Text block
   textBlock: {
     position: 'absolute',
-    bottom: SEA_HEIGHT + 36,
+    bottom: SEA_HEIGHT + 110,
     alignItems: 'center',
   },
   title: {
