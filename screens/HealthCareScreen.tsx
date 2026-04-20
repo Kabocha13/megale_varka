@@ -304,6 +304,11 @@ export default function HealthCareScreen() {
     animateFormIn();
   }, [animateFormIn]);
 
+  const handleBack = useCallback(() => {
+    setSelectedDate(today);
+    animateFormOut();
+  }, [today, animateFormOut]);
+
   const sleepDuration = calcSleepHours(bedTime, wakeTime);
 
   if (loading) {
@@ -329,11 +334,21 @@ export default function HealthCareScreen() {
         <ScrollView style={s.container} contentContainerStyle={s.content}>
       {/* Header */}
       <View style={s.header}>
-        <Text style={s.title}>健康記録</Text>
-        <View style={s.headerRight}>
+        <View style={s.headerLeft}>
+          <Text style={s.title}>健康記録</Text>
           <Text style={s.dateText}>{formatDate(selectedDate)}</Text>
           {alreadySaved && <Text style={s.savedBadge}>✓ 記録済み</Text>}
         </View>
+        {isRetroactive && (
+          <TouchableOpacity
+            style={s.backBtn}
+            onPress={handleBack}
+            accessibilityRole="button"
+            accessibilityLabel="戻る"
+          >
+            <Text style={s.backBtnText}>← 戻る</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Date pills — up to 3 retroactive days */}
@@ -648,10 +663,19 @@ const s = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 10,
   },
-  headerRight: { alignItems: 'flex-end' },
+  headerLeft: { flex: 1 },
   title: { fontSize: 20, fontWeight: 'bold', color: C.primary },
-  dateText: { fontSize: 12, color: C.sub },
+  dateText: { fontSize: 12, color: C.sub, marginTop: 2 },
   savedBadge: { marginTop: 2, fontSize: 11, color: '#2E7D32', fontWeight: 'bold' },
+  backBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: C.selected,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  backBtnText: { fontSize: 12, color: C.primary, fontWeight: 'bold' },
 
   datePillRow: {
     flexDirection: 'row',
