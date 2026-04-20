@@ -51,6 +51,19 @@ interface Task {
   completed: boolean;
 }
 
+type ESStatus = '下書き' | '提出済';
+
+interface ESItem {
+  id: string;
+  question: string;
+  answer: string;
+  charLimit: number;
+  status: ESStatus;
+  memo: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface Company {
   id: string;
   name: string;
@@ -62,6 +75,7 @@ interface Company {
   tasks: Task[];
   globalFieldValues: Record<string, string>;
   memo: string;
+  entrySheets: ESItem[];
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -123,10 +137,32 @@ const GOAL_COLOR: Record<GoalType, string> = {
   'その他': '#6D4C41',
 };
 
+const ES_STATUS_OPTIONS: ESStatus[] = ['下書き', '提出済'];
+const ES_STATUS_COLOR: Record<ESStatus, string> = {
+  '下書き': '#F59E0B',
+  '提出済': '#4CAF50',
+};
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function uid(): string {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
+
+function nowISO(): string {
+  return new Date().toISOString();
+}
+
+function formatDateShort(iso: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function makeEmptyES(): ESItem {
+  const t = nowISO();
+  return { id: uid(), question: '', answer: '', charLimit: 0, status: '下書き', memo: '', createdAt: t, updatedAt: t };
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -153,6 +189,7 @@ function makeEmptyCompany(): Company {
     tasks: [],
     globalFieldValues: {},
     memo: '',
+    entrySheets: [],
   };
 }
 
@@ -936,11 +973,13 @@ interface CompanyViewScreenProps {
   onEdit: () => void;
   onBack: () => void;
   onToggleTask: (taskId: string, completed: boolean) => void;
+  onNavigateToES: (esId: string | null) => void;
 }
 
-function CompanyViewScreen({ company, globalFields, onEdit, onBack, onToggleTask }: CompanyViewScreenProps) {
+function CompanyViewScreen({ company, globalFields, onEdit, onBack, onToggleTask, onNavigateToES }: CompanyViewScreenProps) {
   const pendingTasks = company.tasks.filter(t => !t.completed);
   const doneTasks = company.tasks.filter(t => t.completed);
+  const entrySheets = company.entrySheets ?? [];
 
   return (
     <View style={vS.root}>
@@ -1010,6 +1049,53 @@ function CompanyViewScreen({ company, globalFields, onEdit, onBack, onToggleTask
             </View>
           </View>
         ) : null}
+
+        {/* エントリーシート */}
+        <View style={vS.section}>
+          <View style={esVS.sectionHeader}>
+            <Text style={vS.sectionTitle}>エントリーシート（{entrySheets.length}件）</Text>
+            <TouchableOpacity
+              style={esVS.addEsBtn}
+              onPress={() => onNavigateToES(null)}
+              accessibilityRole="button"
+              accessibilityLabel="ESを追加"
+            >
+              <Text style={esVS.addEsBtnText}>＋ 追加</Text>
+            </TouchableOpacity>
+          </View>
+          {entrySheets.length === 0 ? (
+            <Text style={vS.emptyText}>ESはまだありません</Text>
+          ) : (
+            <View style={vS.card}>
+              {entrySheets.map((es, i) => {
+                const over = es.charLimit > 0 && es.answer.length > es.charLimit;
+                return (
+                  <TouchableOpacity
+                    key={es.id}
+                    style={[esVS.esRow, i === entrySheets.length - 1 && vS.rowLast]}
+                    onPress={() => onNavigateToES(es.id)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={esVS.esRowBody}>
+                      <Text style={esVS.esQuestion} numberOfLines={2}>
+                        {es.question || '（設問未入力）'}
+                      </Text>
+                      <View style={esVS.esMeta}>
+                        <View style={[esVS.statusBadge, { backgroundColor: ES_STATUS_COLOR[es.status] }]}>
+                          <Text style={esVS.statusBadgeText}>{es.status}</Text>
+                        </View>
+                        <Text style={[esVS.charInfo, over && esVS.charInfoOver]}>
+                          {es.answer.length}{es.charLimit > 0 ? ` / ${es.charLimit}字` : '字'}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={esVS.chevron}>›</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+        </View>
 
         {/* 未完了タスク */}
         <View style={vS.section}>
@@ -1185,6 +1271,38 @@ const vS = StyleSheet.create({
   taskTitle: { fontSize: 14, color: C.text, fontWeight: '500' },
   taskTitleDone: { color: C.muted, textDecorationLine: 'line-through' },
   taskMeta: { fontSize: 12, color: C.sub, marginTop: 2 },
+});
+
+const esVS = StyleSheet.create({
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  addEsBtn: {
+    backgroundColor: C.primary,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  addEsBtnText: { color: '#FFF', fontSize: 13, fontWeight: 'bold' },
+  esRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+  },
+  esRowBody: { flex: 1 },
+  esQuestion: { fontSize: 14, color: C.text, marginBottom: 6, lineHeight: 20 },
+  esMeta: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  statusBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 },
+  statusBadgeText: { color: '#FFF', fontSize: 11, fontWeight: 'bold' },
+  charInfo: { fontSize: 12, color: C.light },
+  charInfoOver: { color: C.danger, fontWeight: 'bold' },
+  chevron: { fontSize: 20, color: C.muted, marginLeft: 8 },
 });
 
 // ─── CompanyListScreen ────────────────────────────────────────────────────────
@@ -1791,13 +1909,270 @@ const dS = StyleSheet.create({
   bottomPad: { height: 32 },
 });
 
+// ─── ESEditScreen ─────────────────────────────────────────────────────────────
+
+interface ESEditScreenProps {
+  es: ESItem;
+  isNew: boolean;
+  companyName: string;
+  onSave: (es: ESItem) => void;
+  onDelete: () => void;
+  onBack: () => void;
+}
+
+function ESEditScreen({ es, isNew, companyName, onSave, onDelete, onBack }: ESEditScreenProps) {
+  const [form, setForm] = useState<ESItem>(es);
+  const [showStatusPicker, setShowStatusPicker] = useState(false);
+  const [charLimitText, setCharLimitText] = useState(es.charLimit > 0 ? String(es.charLimit) : '');
+  const originalRef = useRef(JSON.stringify(es));
+
+  const set = <K extends keyof ESItem>(key: K, value: ESItem[K]) =>
+    setForm(f => ({ ...f, [key]: value }));
+
+  const isDirty = () => JSON.stringify(form) !== originalRef.current || charLimitText !== (es.charLimit > 0 ? String(es.charLimit) : '');
+
+  const handleBack = () => {
+    if (isDirty()) {
+      Alert.alert('変更を破棄しますか？', '保存されていない変更は失われます。', [
+        { text: '続けて編集', style: 'cancel' },
+        { text: '破棄して戻る', style: 'destructive', onPress: onBack },
+      ]);
+    } else {
+      onBack();
+    }
+  };
+
+  const handleSave = () => {
+    if (!form.question.trim()) {
+      Alert.alert('エラー', '設問を入力してください。');
+      return;
+    }
+    const parsed = parseInt(charLimitText, 10);
+    const limit = charLimitText.trim() === '' || isNaN(parsed) ? 0 : parsed;
+    const updated: ESItem = { ...form, charLimit: limit, updatedAt: nowISO() };
+    onSave(updated);
+    originalRef.current = JSON.stringify(updated);
+    onBack();
+  };
+
+  const handleDelete = () => {
+    Alert.alert('ESを削除', '削除すると元に戻せません。', [
+      { text: 'キャンセル', style: 'cancel' },
+      { text: '削除', style: 'destructive', onPress: () => { onDelete(); onBack(); } },
+    ]);
+  };
+
+  const charCount = form.answer.length;
+  const parsedLimit = parseInt(charLimitText, 10);
+  const effectiveLimit = charLimitText.trim() === '' || isNaN(parsedLimit) ? 0 : parsedLimit;
+  const overLimit = effectiveLimit > 0 && charCount > effectiveLimit;
+
+  return (
+    <View style={esS.root}>
+      <View style={esS.navBar}>
+        <TouchableOpacity onPress={handleBack} style={esS.navBack}>
+          <Text style={esS.navBackText}>＜ 戻る</Text>
+        </TouchableOpacity>
+        <Text style={esS.navTitle} numberOfLines={1}>
+          {isNew ? '新規ES' : companyName}
+        </Text>
+        <TouchableOpacity onPress={handleSave} style={esS.navSave}>
+          <Text style={esS.navSaveText}>保存</Text>
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView style={esS.scroll} contentContainerStyle={esS.scrollContent} keyboardShouldPersistTaps="handled">
+        <Text style={esS.sectionTitle}>基本設定</Text>
+        <View style={esS.section}>
+          <Text style={esS.fieldLabel}>ステータス</Text>
+          <TouchableOpacity style={esS.selectBtn} onPress={() => setShowStatusPicker(true)}>
+            <View style={[esS.statusDot, { backgroundColor: ES_STATUS_COLOR[form.status] }]} />
+            <Text style={esS.selectValue}>{form.status}</Text>
+            <Text style={esS.selectArrow}>▼</Text>
+          </TouchableOpacity>
+
+          <Text style={esS.fieldLabel}>文字数制限（任意）</Text>
+          <TextInput
+            style={esS.input}
+            value={charLimitText}
+            onChangeText={setCharLimitText}
+            placeholder="例：400（なければ空欄）"
+            placeholderTextColor={C.muted}
+            keyboardType="number-pad"
+          />
+        </View>
+
+        <Text style={esS.sectionTitle}>設問</Text>
+        <View style={esS.section}>
+          <TextInput
+            style={[esS.input, esS.inputMulti]}
+            value={form.question}
+            onChangeText={v => set('question', v)}
+            placeholder="設問をここに入力してください"
+            placeholderTextColor={C.muted}
+            multiline
+            textAlignVertical="top"
+          />
+        </View>
+
+        <View style={esS.sectionTitleRow}>
+          <Text style={esS.sectionTitle}>回答</Text>
+          <Text style={[esS.charCounter, overLimit && esS.charCounterOver]}>
+            {charCount}{effectiveLimit > 0 ? ` / ${effectiveLimit}字` : '字'}
+          </Text>
+        </View>
+        <View style={esS.section}>
+          <TextInput
+            style={[esS.input, esS.inputAnswer]}
+            value={form.answer}
+            onChangeText={v => set('answer', v)}
+            placeholder="回答を入力してください"
+            placeholderTextColor={C.muted}
+            multiline
+            textAlignVertical="top"
+          />
+          {overLimit && (
+            <Text style={esS.overLimitMsg}>
+              文字数制限を {charCount - effectiveLimit} 字超過しています
+            </Text>
+          )}
+        </View>
+
+        <Text style={esS.sectionTitle}>メモ</Text>
+        <View style={esS.section}>
+          <TextInput
+            style={[esS.input, esS.inputMemo]}
+            value={form.memo}
+            onChangeText={v => set('memo', v)}
+            placeholder="参考にしたこと・修正ポイントなど"
+            placeholderTextColor={C.muted}
+            multiline
+            textAlignVertical="top"
+          />
+        </View>
+
+        {!isNew && (
+          <View style={esS.metaRow}>
+            <Text style={esS.metaText}>作成日: {formatDateShort(form.createdAt)}</Text>
+            <Text style={esS.metaText}>更新日: {formatDateShort(form.updatedAt)}</Text>
+          </View>
+        )}
+
+        {!isNew && (
+          <TouchableOpacity style={esS.deleteBtn} onPress={handleDelete}>
+            <Text style={esS.deleteBtnText}>このESを削除する</Text>
+          </TouchableOpacity>
+        )}
+
+        <View style={esS.bottomPad} />
+      </ScrollView>
+
+      <PickerModal
+        visible={showStatusPicker}
+        title="ステータスを選択"
+        options={ES_STATUS_OPTIONS}
+        value={form.status}
+        onSelect={v => set('status', v as ESStatus)}
+        onClose={() => setShowStatusPicker(false)}
+      />
+    </View>
+  );
+}
+
+const esS = StyleSheet.create({
+  root: { flex: 1, backgroundColor: C.bg },
+  navBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: C.card,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+  },
+  navBack: { paddingRight: 10, paddingVertical: 4 },
+  navBackText: { color: C.primary, fontSize: 15 },
+  navTitle: { flex: 1, fontSize: 16, fontWeight: 'bold', color: C.text },
+  navSave: {
+    backgroundColor: C.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  navSaveText: { color: C.card, fontSize: 14, fontWeight: 'bold' },
+  scroll: { flex: 1 },
+  scrollContent: { padding: 16 },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: C.primary,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  charCounter: { fontSize: 14, color: C.light, fontWeight: '600' },
+  charCounterOver: { color: C.danger },
+  section: {
+    backgroundColor: C.card,
+    borderRadius: 12,
+    padding: 14,
+  },
+  fieldLabel: { fontSize: 12, color: C.sub, marginTop: 12, marginBottom: 4 },
+  input: {
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: C.text,
+    backgroundColor: '#FAFAFA',
+  },
+  inputMulti: { minHeight: 80, textAlignVertical: 'top' },
+  inputAnswer: { minHeight: 200, textAlignVertical: 'top', lineHeight: 22 },
+  inputMemo: { minHeight: 80, textAlignVertical: 'top' },
+  selectBtn: {
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#FAFAFA',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusDot: { width: 10, height: 10, borderRadius: 5, marginRight: 8 },
+  selectValue: { flex: 1, fontSize: 14, color: C.text },
+  selectArrow: { fontSize: 11, color: C.muted },
+  overLimitMsg: { marginTop: 6, fontSize: 12, color: C.danger, fontWeight: 'bold' },
+  metaRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 16, paddingHorizontal: 4 },
+  metaText: { fontSize: 11, color: C.muted },
+  deleteBtn: {
+    marginTop: 24,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: C.danger,
+  },
+  deleteBtnText: { color: C.danger, fontSize: 15, fontWeight: 'bold' },
+  bottomPad: { height: 32 },
+});
+
 // ─── JobManagementScreen (root) ───────────────────────────────────────────────
 
 type ViewState =
   | { mode: 'list' }
   | { mode: 'view'; companyId: string }
   | { mode: 'detail'; companyId: string }
-  | { mode: 'new'; draft: Company };
+  | { mode: 'new'; draft: Company }
+  | { mode: 'es'; companyId: string; draft: ESItem };
 
 function JobManagementScreen() {
   const { uid, isDemo } = useAuth();
@@ -1875,6 +2250,7 @@ function JobManagementScreen() {
             tasks: Array.isArray(data.tasks) ? data.tasks : [],
             globalFieldValues: isPlainObject(data.globalFieldValues) ? toStringRecord(data.globalFieldValues) : {},
             memo: data.memo ?? '',
+            entrySheets: Array.isArray(data.entrySheets) ? data.entrySheets : [],
           } as Company;
         });
         setCompanies(loaded);
@@ -1935,6 +2311,30 @@ function JobManagementScreen() {
     }
   }, [companies]);
 
+  if (view.mode === 'es') {
+    const company = companies.find(c => c.id === view.companyId);
+    if (!company) return <View style={s.loadingContainer}><ActivityIndicator color={C.primary} /></View>;
+    return (
+      <ESEditScreen
+        es={view.draft}
+        isNew={!(company.entrySheets ?? []).some(e => e.id === view.draft.id)}
+        companyName={company.name}
+        onSave={(updated) => {
+          const sheets = company.entrySheets ?? [];
+          const next = sheets.some(e => e.id === updated.id)
+            ? sheets.map(e => e.id === updated.id ? updated : e)
+            : [...sheets, updated];
+          saveCompany({ ...company, entrySheets: next });
+        }}
+        onDelete={() => {
+          const next = (company.entrySheets ?? []).filter(e => e.id !== view.draft.id);
+          saveCompany({ ...company, entrySheets: next });
+        }}
+        onBack={() => setView({ mode: 'view', companyId: view.companyId })}
+      />
+    );
+  }
+
   if (view.mode === 'view') {
     const company = companies.find(c => c.id === view.companyId);
     if (!company) return <View style={s.loadingContainer}><ActivityIndicator color={C.primary} /></View>;
@@ -1950,6 +2350,12 @@ function JobManagementScreen() {
             tasks: company.tasks.map(t => t.id === taskId ? { ...t, completed } : t),
           };
           saveCompany(updated);
+        }}
+        onNavigateToES={(esId) => {
+          const draft = esId
+            ? (company.entrySheets ?? []).find(e => e.id === esId) ?? makeEmptyES()
+            : makeEmptyES();
+          setView({ mode: 'es', companyId: view.companyId, draft });
         }}
       />
     );
