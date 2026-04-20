@@ -18,3 +18,7 @@ export function ChatIcon({ color, size }: Props) {
 export function SettingsIcon({ color, size }: Props) {
   return <MaterialIcons name="settings" color={color} size={size} />;
 }
+
+export function DocumentIcon({ color, size }: Props) {
+  return <MaterialIcons name="description" color={color} size={size} />;
+}
