@@ -103,7 +103,7 @@ export default function HealthStatsScreen({ uid, onEdit }: Props) {
       <View style={s.header}>
         <Text style={s.title}>健康統計</Text>
         {onEdit && (
-          <TouchableOpacity onPress={onEdit} style={s.editBtn}>
+          <TouchableOpacity onPress={() => onEdit()} style={s.editBtn}>
             <Text style={s.editBtnText}>記録を編集</Text>
           </TouchableOpacity>
         )}
