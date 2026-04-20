@@ -339,7 +339,6 @@ export default function HealthCareScreen() {
         sleepSource,
         steps,
         activeCalories,
-        dailyQuestion,
         dailyAnswer,
         isRetroactive,
         updatedAt: serverTimestamp(),

@@ -19,8 +19,8 @@ export interface HealthRecord {
   sleepSource?: string;
   steps?: number | null;
   activeCalories?: number | null;
-  // Daily rotating CES-D style question: the question text and chosen answer.
-  dailyQuestion?: string;
+  // Daily rotating CES-D style question — only the answer is stored;
+  // the question itself is re-derived from the date at read time.
   dailyAnswer?: DailyAnswer;
   // true when the user filled this day retroactively (from a later date).
   // Retroactive entries are included in charts but excluded from the streak.
