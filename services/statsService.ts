@@ -174,6 +174,10 @@ async function cacheSummary(stats: HealthStats): Promise<void> {
   await AsyncStorage.setItem(STREAK_CACHE_KEY, JSON.stringify(payload));
 
   // Push to shared UserDefaults via native module so the iOS widget can read it.
+  // Key names here must match the UserDefaults keys read by the widget:
+  //   streakCount  ← kStreakKey in StreakBridgeModule.m
+  //   avgMood      ← kMoodKey
+  //   avgSleepHours ← kSleepKey
   if (Platform.OS === 'ios' && NativeModules.StreakBridge) {
     await NativeModules.StreakBridge.saveStreakData({
       streakCount: stats.streak,
