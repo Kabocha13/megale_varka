@@ -48,11 +48,19 @@ struct StreakWidgetView: View {
     let entry: StreakEntry
 
     var body: some View {
+        if #available(iOSApplicationExtension 17.0, *) {
+            baseContent
+                .containerBackground(.regularMaterial, for: .widget)
+        } else {
+            baseContent
+        }
+    }
+
+    private var baseContent: some View {
         VStack(spacing: 4) {
             Image(systemName: "flame.fill")
                 .font(.system(size: 44))
                 .foregroundColor(entry.recordedToday ? .orange : Color(.systemGray3))
-                .symbolEffect(.bounce, value: entry.recordedToday)
 
             Text("\(entry.streak)")
                 .font(.system(size: 26, weight: .bold, design: .rounded))
@@ -63,7 +71,6 @@ struct StreakWidgetView: View {
                 .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .containerBackground(.regularMaterial, for: .widget)
     }
 }
 
@@ -82,11 +89,3 @@ struct StreakWidgetMain: Widget {
     }
 }
 
-// MARK: - Preview
-
-#Preview(as: .systemSmall) {
-    StreakWidgetMain()
-} timeline: {
-    StreakEntry(date: .now, streak: 12, recordedToday: true)
-    StreakEntry(date: .now, streak: 12, recordedToday: false)
-}
