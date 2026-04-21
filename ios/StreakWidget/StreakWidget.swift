@@ -1,0 +1,92 @@
+import WidgetKit
+import SwiftUI
+
+// MARK: - Data model
+
+struct StreakEntry: TimelineEntry {
+    let date: Date
+    let streak: Int
+    let recordedToday: Bool
+}
+
+// MARK: - Timeline provider
+
+struct StreakProvider: TimelineProvider {
+    private static let suiteName = "group.com.megale_varka"
+
+    func placeholder(in context: Context) -> StreakEntry {
+        StreakEntry(date: Date(), streak: 7, recordedToday: true)
+    }
+
+    func getSnapshot(in context: Context, completion: @escaping (StreakEntry) -> Void) {
+        completion(readEntry())
+    }
+
+    func getTimeline(in context: Context, completion: @escaping (Timeline<StreakEntry>) -> Void) {
+        let entry = readEntry()
+        // Refresh at midnight so the flame resets automatically when the day changes
+        let midnight = Calendar.current.nextDate(
+            after: Date(),
+            matching: DateComponents(hour: 0, minute: 0, second: 0),
+            matchingPolicy: .nextTime
+        ) ?? Date().addingTimeInterval(3600)
+        let timeline = Timeline(entries: [entry], policy: .after(midnight))
+        completion(timeline)
+    }
+
+    private func readEntry() -> StreakEntry {
+        let defaults = UserDefaults(suiteName: Self.suiteName)
+        let streak = defaults?.integer(forKey: "streak") ?? 0
+        let recordedToday = defaults?.bool(forKey: "recordedToday") ?? false
+        return StreakEntry(date: Date(), streak: streak, recordedToday: recordedToday)
+    }
+}
+
+// MARK: - Widget view
+
+struct StreakWidgetView: View {
+    let entry: StreakEntry
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Image(systemName: "flame.fill")
+                .font(.system(size: 44))
+                .foregroundColor(entry.recordedToday ? .orange : Color(.systemGray3))
+                .symbolEffect(.bounce, value: entry.recordedToday)
+
+            Text("\(entry.streak)")
+                .font(.system(size: 26, weight: .bold, design: .rounded))
+                .foregroundColor(.primary)
+
+            Text("日連続")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .containerBackground(.regularMaterial, for: .widget)
+    }
+}
+
+// MARK: - Widget configuration
+
+struct StreakWidgetMain: Widget {
+    let kind = "StreakWidget"
+
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: kind, provider: StreakProvider()) { entry in
+            StreakWidgetView(entry: entry)
+        }
+        .configurationDisplayName("継続記録")
+        .description("健康記録の連続日数を炎で表示します")
+        .supportedFamilies([.systemSmall, .systemMedium])
+    }
+}
+
+// MARK: - Preview
+
+#Preview(as: .systemSmall) {
+    StreakWidgetMain()
+} timeline: {
+    StreakEntry(date: .now, streak: 12, recordedToday: true)
+    StreakEntry(date: .now, streak: 12, recordedToday: false)
+}

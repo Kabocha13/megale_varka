@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { collection, getDocs, limit, orderBy, query } from 'firebase/firestore';
 import { db } from '../firebase/config';
+import { updateStreakWidget } from '../modules/StreakBridge';
 
 // --- Types ---
 export type AppetiteValue = 'nothing' | 'water' | 'noodles' | 'set_meal' | 'steak';
@@ -156,6 +157,7 @@ export async function fetchHealthStats(uid: string, days = 30): Promise<HealthSt
   };
 
   await cacheSummary(stats).catch(() => {});
+  updateStreakWidget(streak, onTimeDates.has(todayString()));
   return stats;
 }
 
