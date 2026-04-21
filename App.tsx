@@ -8,11 +8,10 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { ChatIcon, DocumentIcon, HomeIcon, SettingsIcon, WorkIcon } from './components/NavIcons';
+import { ChatIcon, HomeIcon, SettingsIcon, WorkIcon } from './components/NavIcons';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
 import HealthCareScreen from './screens/HealthCareScreen';
-import EntrySheetScreen from './screens/EntrySheetScreen';
 import JobManagementScreen from './screens/JobManagementScreen';
 import JobSupportScreen from './screens/JobSupportScreen';
 import LoginScreen from './screens/LoginScreen';
@@ -21,7 +20,7 @@ import SettingsScreen from './screens/SettingsScreen';
 import { requestHealthKitPermissions } from './services/healthService';
 import { requestNotificationPermission } from './services/notifications';
 
-type TabName = 'health_care' | 'job_management' | 'entry_sheet' | 'job_support' | 'settings';
+type TabName = 'health_care' | 'job_management' | 'job_support' | 'settings';
 type AuthScreen = 'login' | 'register' | 'forgot_password';
 
 const ICON_SIZE = 28;
@@ -33,20 +32,18 @@ function TabIcon({ name, active }: { name: TabName; active: boolean }) {
   switch (name) {
     case 'health_care':    return <HomeIcon color={color} size={ICON_SIZE} />;
     case 'job_management': return <WorkIcon color={color} size={ICON_SIZE} />;
-    case 'entry_sheet':    return <DocumentIcon color={color} size={ICON_SIZE} />;
     case 'job_support':    return <ChatIcon color={color} size={ICON_SIZE} />;
     case 'settings':       return <SettingsIcon color={color} size={ICON_SIZE} />;
     default:               return null;
   }
 }
 
-const TABS: TabName[] = ['health_care', 'job_management', 'entry_sheet', 'job_support', 'settings'];
+const TABS: TabName[] = ['health_care', 'job_management', 'job_support', 'settings'];
 
 function renderScreen(tab: TabName) {
   switch (tab) {
     case 'health_care':    return <HealthCareScreen />;
     case 'job_management': return <JobManagementScreen />;
-    case 'entry_sheet':    return <EntrySheetScreen />;
     case 'job_support':    return <JobSupportScreen />;
     case 'settings':       return <SettingsScreen />;
     default:              return null;
@@ -127,8 +124,6 @@ function AppContent() {
                 ? 'ホーム'
                 : tab === 'job_management'
                 ? '求人管理'
-                : tab === 'entry_sheet'
-                ? 'ESドキュメント'
                 : tab === 'job_support'
                 ? '就職支援'
                 : '設定'
