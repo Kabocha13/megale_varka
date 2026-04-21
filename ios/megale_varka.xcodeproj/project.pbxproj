@@ -12,6 +12,7 @@
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
 		855D6E8547C0C0E770A70D65 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
+		AA00BB11CC22DD33EE440004 /* StreakBridgeModule.m in Sources */ = {isa = PBXBuildFile; fileRef = AA00BB11CC22DD33EE440003 /* StreakBridgeModule.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -25,6 +26,8 @@
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = megale_varka/AppDelegate.swift; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = megale_varka/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		AA00BB11CC22DD33EE440001 /* megale_varka.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; name = megale_varka.entitlements; path = megale_varka/megale_varka.entitlements; sourceTree = "<group>"; };
+		AA00BB11CC22DD33EE440002 /* StreakBridgeModule.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = StreakBridgeModule.h; path = megale_varka/StreakBridgeModule.h; sourceTree = "<group>"; };
+		AA00BB11CC22DD33EE440003 /* StreakBridgeModule.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = StreakBridgeModule.m; path = megale_varka/StreakBridgeModule.m; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
@@ -49,6 +52,8 @@
 				81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */,
 				13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */,
 				AA00BB11CC22DD33EE440001 /* megale_varka.entitlements */,
+				AA00BB11CC22DD33EE440002 /* StreakBridgeModule.h */,
+				AA00BB11CC22DD33EE440003 /* StreakBridgeModule.m */,
 			);
 			name = megale_varka;
 			sourceTree = "<group>";
@@ -257,6 +262,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				761780ED2CA45674006654EE /* AppDelegate.swift in Sources */,
+				AA00BB11CC22DD33EE440004 /* StreakBridgeModule.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
