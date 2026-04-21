@@ -142,6 +142,7 @@ const ES_STATUS_COLOR: Record<ESStatus, string> = {
   '下書き': '#F59E0B',
   '提出済': '#4CAF50',
 };
+const MAX_ES_PER_COMPANY = 30;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -190,6 +191,23 @@ function makeEmptyCompany(): Company {
     globalFieldValues: {},
     memo: '',
     entrySheets: [],
+  };
+}
+
+function normalizeES(data: unknown): ESItem {
+  const d = isPlainObject(data) ? data : {};
+  const status = ES_STATUS_OPTIONS.includes(d.status as ESStatus) ? (d.status as ESStatus) : '下書き';
+  const t = nowISO();
+  const rawLimit = typeof d.charLimit === 'number' ? d.charLimit : parseInt(String(d.charLimit ?? ''), 10);
+  return {
+    id: typeof d.id === 'string' && d.id ? d.id : uid(),
+    question: typeof d.question === 'string' ? d.question : '',
+    answer: typeof d.answer === 'string' ? d.answer : '',
+    charLimit: isFinite(rawLimit) && rawLimit >= 0 ? Math.floor(rawLimit) : 0,
+    status,
+    memo: typeof d.memo === 'string' ? d.memo : '',
+    createdAt: typeof d.createdAt === 'string' && d.createdAt ? d.createdAt : t,
+    updatedAt: typeof d.updatedAt === 'string' && d.updatedAt ? d.updatedAt : t,
   };
 }
 
@@ -2236,9 +2254,10 @@ function JobManagementScreen() {
       Promise.all([
         getDocs(collection(db, 'users', uid, 'job_companies')),
         getDoc(doc(db, 'users', uid, 'job_settings', 'global_fields')),
-      ]).then(([snap, fSnap]) => {
-        const loaded = snap.docs.map(d => {
+      ]).then(async ([snap, fSnap]) => {
+        const loaded = await Promise.all(snap.docs.map(async d => {
           const data = d.data() as Partial<Company>;
+          const esSnap = await getDocs(collection(db, 'users', uid, 'job_companies', d.id, 'entry_sheets'));
           return {
             id: data.id ?? d.id,
             name: data.name ?? '',
@@ -2250,9 +2269,9 @@ function JobManagementScreen() {
             tasks: Array.isArray(data.tasks) ? data.tasks : [],
             globalFieldValues: isPlainObject(data.globalFieldValues) ? toStringRecord(data.globalFieldValues) : {},
             memo: data.memo ?? '',
-            entrySheets: Array.isArray(data.entrySheets) ? data.entrySheets : [],
+            entrySheets: esSnap.docs.map(esDoc => normalizeES(esDoc.data())),
           } as Company;
-        });
+        }));
         setCompanies(loaded);
         if (fSnap.exists()) setGlobalFields(fSnap.data().fields ?? []);
         // Re-sync all notifications in case reminder days changed in Settings
@@ -2271,13 +2290,16 @@ function JobManagementScreen() {
       return next;
     });
     if (!isDemo && uid) {
-      setDoc(doc(db, 'users', uid, 'job_companies', company.id), company).catch(() => {});
+      // Omit entrySheets from the company document to stay within Firestore's 1 MiB limit.
+      // ESs are persisted separately in the entry_sheets subcollection via saveES.
+      const { entrySheets: _, ...companyData } = company;
+      setDoc(doc(db, 'users', uid, 'job_companies', company.id), companyData).catch(() => {});
     }
     syncNotifications(company);
   }, [uid, isDemo, syncNotifications]);
 
   // 企業を削除
-  const removeCompany = useCallback((companyId: string, tasks: Task[]) => {
+  const removeCompany = useCallback((companyId: string, tasks: Task[], entrySheets: ESItem[]) => {
     setCompanies(prev => {
       const next = prev.filter(c => c.id !== companyId);
       if (isDemo) AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => {});
@@ -2285,8 +2307,50 @@ function JobManagementScreen() {
     });
     if (!isDemo && uid) {
       deleteDoc(doc(db, 'users', uid, 'job_companies', companyId)).catch(() => {});
+      Promise.all(
+        entrySheets.map(es =>
+          deleteDoc(doc(db, 'users', uid, 'job_companies', companyId, 'entry_sheets', es.id)),
+        ),
+      ).catch(() => {});
     }
     tasks.forEach(t => cancelTaskNotification(t.id).catch(() => {}));
+  }, [uid, isDemo]);
+
+  // ES を保存（追加・更新）― Firestoreではentry_sheetsサブコレクションに保存
+  const saveES = useCallback((companyId: string, es: ESItem) => {
+    setCompanies(prev => {
+      const next = prev.map(c => {
+        if (c.id !== companyId) return c;
+        const sheets = c.entrySheets ?? [];
+        const isUpdate = sheets.some(e => e.id === es.id);
+        // Enforce per-company limit for new items
+        if (!isUpdate && sheets.length >= MAX_ES_PER_COMPANY) return c;
+        const updated = isUpdate
+          ? sheets.map(e => e.id === es.id ? es : e)
+          : [...sheets, es];
+        return { ...c, entrySheets: updated };
+      });
+      if (isDemo) AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+    if (!isDemo && uid) {
+      setDoc(doc(db, 'users', uid, 'job_companies', companyId, 'entry_sheets', es.id), es).catch(() => {});
+    }
+  }, [uid, isDemo]);
+
+  // ES を削除 ― Firestoreではentry_sheetsサブコレクションから削除
+  const deleteES = useCallback((companyId: string, esId: string) => {
+    setCompanies(prev => {
+      const next = prev.map(c => {
+        if (c.id !== companyId) return c;
+        return { ...c, entrySheets: (c.entrySheets ?? []).filter(e => e.id !== esId) };
+      });
+      if (isDemo) AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+    if (!isDemo && uid) {
+      deleteDoc(doc(db, 'users', uid, 'job_companies', companyId, 'entry_sheets', esId)).catch(() => {});
+    }
   }, [uid, isDemo]);
 
   // 全社共通項目を保存
@@ -2320,15 +2384,10 @@ function JobManagementScreen() {
         isNew={!(company.entrySheets ?? []).some(e => e.id === view.draft.id)}
         companyName={company.name}
         onSave={(updated) => {
-          const sheets = company.entrySheets ?? [];
-          const next = sheets.some(e => e.id === updated.id)
-            ? sheets.map(e => e.id === updated.id ? updated : e)
-            : [...sheets, updated];
-          saveCompany({ ...company, entrySheets: next });
+          saveES(view.companyId, updated);
         }}
         onDelete={() => {
-          const next = (company.entrySheets ?? []).filter(e => e.id !== view.draft.id);
-          saveCompany({ ...company, entrySheets: next });
+          deleteES(view.companyId, view.draft.id);
         }}
         onBack={() => setView({ mode: 'view', companyId: view.companyId })}
       />
@@ -2352,6 +2411,10 @@ function JobManagementScreen() {
           saveCompany(updated);
         }}
         onNavigateToES={(esId) => {
+          if (!esId && (company.entrySheets ?? []).length >= MAX_ES_PER_COMPANY) {
+            Alert.alert('上限に達しました', `1社につき最大${MAX_ES_PER_COMPANY}件のESを登録できます。`);
+            return;
+          }
           const draft = esId
             ? (company.entrySheets ?? []).find(e => e.id === esId) ?? makeEmptyES()
             : makeEmptyES();
@@ -2385,7 +2448,7 @@ function JobManagementScreen() {
         globalFields={globalFields}
         onUpdateGlobalFields={persistGlobalFields}
         onSave={saveCompany}
-        onDelete={() => removeCompany(view.companyId, company.tasks)}
+        onDelete={() => removeCompany(view.companyId, company.tasks, company.entrySheets ?? [])}
         onBack={() => setView({ mode: 'list' })}
       />
     );
