@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { collection, getDocs, limit, orderBy, query } from 'firebase/firestore';
-import { NativeModules, Platform } from 'react-native';
 import { db } from '../firebase/config';
+import { updateStreakWidget } from '../modules/StreakBridge';
 
 // --- Types ---
 export type AppetiteValue = 'nothing' | 'water' | 'noodles' | 'set_meal' | 'steak';
@@ -41,8 +41,9 @@ export interface HealthStats {
   hasExerciseData: boolean;
 }
 
-// Shared storage key — iOS widget reads the same value via
-// App Groups + UserDefaults bridge (StreakBridgeModule).
+// AsyncStorage key used by the React Native app.
+// On iOS, the widget does not read AsyncStorage directly; it reads a
+// mirrored value exposed through App Groups + UserDefaults via StreakBridgeModule.
 const STREAK_CACHE_KEY = '@health_stats_cache_v1';
 
 // --- Helpers ---
@@ -157,6 +158,7 @@ export async function fetchHealthStats(uid: string, days = 30): Promise<HealthSt
   };
 
   await cacheSummary(stats).catch(() => {});
+  updateStreakWidget(streak, onTimeDates.has(todayString()));
   return stats;
 }
 
@@ -172,19 +174,6 @@ async function cacheSummary(stats: HealthStats): Promise<void> {
     updatedAt: Date.now(),
   };
   await AsyncStorage.setItem(STREAK_CACHE_KEY, JSON.stringify(payload));
-
-  // Push to shared UserDefaults via native module so the iOS widget can read it.
-  // Key names here must match the UserDefaults keys read by the widget:
-  //   streakCount  ← kStreakKey in StreakBridgeModule.m
-  //   avgMood      ← kMoodKey
-  //   avgSleepHours ← kSleepKey
-  if (Platform.OS === 'ios' && NativeModules.StreakBridge) {
-    await NativeModules.StreakBridge.saveStreakData({
-      streakCount: stats.streak,
-      avgMood: stats.avgMood ?? null,
-      avgSleepHours: stats.avgSleepHours ?? null,
-    }).catch(() => {});
-  }
 }
 
 export async function readCachedSummary(): Promise<{ streak: number } | null> {
