@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import MaterialIcons from '@react-native-vector-icons/material-icons';
 import LineChart, { LinePoint } from '../components/charts/LineChart';
 import HorizontalBarChart from '../components/charts/HorizontalBarChart';
 import StackedBar, { StackSegment } from '../components/charts/StackedBar';
@@ -17,12 +18,14 @@ interface Props {
   onEdit?: () => void;
 }
 
-const APPETITE_META: Record<AppetiteValue, { label: string; emoji: string; color: string }> = {
-  nothing:  { label: '食べれない', emoji: '🚫', color: '#C77D7D' },
-  water:    { label: '水',         emoji: '💧', color: '#7FA8D0' },
-  noodles:  { label: '麺類',       emoji: '🍜', color: '#E0B877' },
-  set_meal: { label: '定食',       emoji: '🍱', color: '#6EA56E' },
-  steak:    { label: 'ステーキ',   emoji: '🥩', color: '#8E5A3C' },
+type MaterialIconName = React.ComponentProps<typeof MaterialIcons>['name'];
+
+const APPETITE_META: Record<AppetiteValue, { label: string; iconName: MaterialIconName; color: string }> = {
+  nothing:  { label: '食べれない', iconName: 'no-meals', color: '#C77D7D' },
+  water:    { label: '水',         iconName: 'opacity', color: '#7FA8D0' },
+  noodles:  { label: '麺類',       iconName: 'ramen-dining', color: '#E0B877' },
+  set_meal: { label: '定食',       iconName: 'set-meal', color: '#6EA56E' },
+  steak:    { label: 'ステーキ',   iconName: 'dinner-dining', color: '#8E5A3C' },
 };
 
 function shortDayLabel(dateStr: string): string {
@@ -148,7 +151,7 @@ export default function HealthStatsScreen({ uid, onEdit }: Props) {
 
   const appetiteStack: StackSegment[] = (Object.keys(APPETITE_META) as AppetiteValue[]).map(k => ({
     label: APPETITE_META[k].label,
-    emoji: APPETITE_META[k].emoji,
+    iconName: APPETITE_META[k].iconName,
     color: APPETITE_META[k].color,
     value: stats.appetiteCounts[k],
   }));
@@ -195,17 +198,17 @@ export default function HealthStatsScreen({ uid, onEdit }: Props) {
       {/* Summary */}
       <View style={s.summaryRow}>
         <View style={[s.summaryCard, s.streakCard]}>
-          <Text style={s.summaryIcon}>⭐</Text>
+          <MaterialIcons name="analytics" size={24} color={C.primary} style={s.summaryIcon} />
           <Text style={s.summaryValue}>{overallScore}</Text>
           <Text style={s.summaryLabel}>総合スコア</Text>
         </View>
         <View style={s.summaryCard}>
-          <Text style={s.summaryIcon}>💚</Text>
+          <MaterialIcons name="health-and-safety" size={24} color="#4F8F6B" style={s.summaryIcon} />
           <Text style={s.summaryValue}>{healthScore}</Text>
           <Text style={s.summaryLabel}>健康スコア</Text>
         </View>
         <View style={s.summaryCard}>
-          <Text style={s.summaryIcon}>💼</Text>
+          <MaterialIcons name="business-center" size={24} color="#7C6A4A" style={s.summaryIcon} />
           <Text style={s.summaryValue}>{jobSearchScore}</Text>
           <Text style={s.summaryLabel}>就活スコア</Text>
         </View>
@@ -289,7 +292,7 @@ export default function HealthStatsScreen({ uid, onEdit }: Props) {
           <View style={s.card}>
             <View style={s.exerciseRow}>
               <View style={s.exerciseItem}>
-                <Text style={s.exerciseIcon}>👟</Text>
+                <MaterialIcons name="directions-walk" size={22} color={C.primary} style={s.exerciseIcon} />
                 <Text style={s.exerciseValue}>
                   {stats.avgSteps !== null ? Math.round(stats.avgSteps).toLocaleString() : '--'}
                 </Text>
@@ -297,7 +300,7 @@ export default function HealthStatsScreen({ uid, onEdit }: Props) {
               </View>
               <View style={s.exerciseDivider} />
               <View style={s.exerciseItem}>
-                <Text style={s.exerciseIcon}>🔥</Text>
+                <MaterialIcons name="local-fire-department" size={22} color="#B8683B" style={s.exerciseIcon} />
                 <Text style={s.exerciseValue}>
                   {stats.avgActiveCalories !== null ? Math.round(stats.avgActiveCalories).toLocaleString() : '--'}
                 </Text>
@@ -371,7 +374,7 @@ const s = StyleSheet.create({
     paddingVertical: 10,
   },
   streakCard: { backgroundColor: '#FFF6EC', borderColor: '#E8C9A0' },
-  summaryIcon: { fontSize: 22 },
+  summaryIcon: { marginBottom: 2 },
   summaryValue: { fontSize: 22, fontWeight: 'bold', color: C.primary, marginTop: 2 },
   summaryLabel: { fontSize: 10, color: C.sub, marginTop: 2 },
 
@@ -441,7 +444,7 @@ const s = StyleSheet.create({
   },
   exerciseDivider: { width: 1, height: 44, backgroundColor: C.border },
   exerciseItem: { alignItems: 'center', flex: 1 },
-  exerciseIcon: { fontSize: 20, marginBottom: 2 },
+  exerciseIcon: { marginBottom: 2 },
   exerciseValue: { fontSize: 20, fontWeight: 'bold', color: C.text },
   exerciseUnit: { fontSize: 11, color: C.muted },
 
