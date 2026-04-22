@@ -53,15 +53,20 @@ interface Task {
 
 type ESStatus = '下書き' | '提出済';
 
-interface ESItem {
+interface ESQAItem {
   id: string;
   question: string;
   answer: string;
   charLimit: number;
+}
+
+interface ESItem {
+  id: string;
   status: ESStatus;
   memo: string;
   createdAt: string;
   updatedAt: string;
+  qaItems: ESQAItem[];
 }
 
 interface Company {
@@ -161,9 +166,13 @@ function formatDateShort(iso: string): string {
   return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
 }
 
+function makeEmptyQA(): ESQAItem {
+  return { id: uid(), question: '', answer: '', charLimit: 0 };
+}
+
 function makeEmptyES(): ESItem {
   const t = nowISO();
-  return { id: uid(), question: '', answer: '', charLimit: 0, status: '下書き', memo: '', createdAt: t, updatedAt: t };
+  return { id: uid(), status: '下書き', memo: '', createdAt: t, updatedAt: t, qaItems: [makeEmptyQA()] };
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -194,20 +203,45 @@ function makeEmptyCompany(): Company {
   };
 }
 
-function normalizeES(data: unknown): ESItem {
+function normalizeQA(data: unknown): ESQAItem {
   const d = isPlainObject(data) ? data : {};
-  const status = ES_STATUS_OPTIONS.includes(d.status as ESStatus) ? (d.status as ESStatus) : '下書き';
-  const t = nowISO();
   const rawLimit = typeof d.charLimit === 'number' ? d.charLimit : parseInt(String(d.charLimit ?? ''), 10);
   return {
     id: typeof d.id === 'string' && d.id ? d.id : uid(),
     question: typeof d.question === 'string' ? d.question : '',
     answer: typeof d.answer === 'string' ? d.answer : '',
     charLimit: isFinite(rawLimit) && rawLimit >= 0 ? Math.floor(rawLimit) : 0,
+  };
+}
+
+function normalizeES(data: unknown): ESItem {
+  const d = isPlainObject(data) ? data : {};
+  const status = ES_STATUS_OPTIONS.includes(d.status as ESStatus) ? (d.status as ESStatus) : '下書き';
+  const t = nowISO();
+
+  // 旧データ移行: question/answer/charLimit が直接ある場合は qaItems に変換
+  let qaItems: ESQAItem[];
+  if (Array.isArray(d.qaItems) && d.qaItems.length > 0) {
+    qaItems = d.qaItems.map(normalizeQA);
+  } else if (typeof d.question === 'string' && d.question) {
+    const rawLimit = typeof d.charLimit === 'number' ? d.charLimit : parseInt(String(d.charLimit ?? ''), 10);
+    qaItems = [{
+      id: uid(),
+      question: d.question,
+      answer: typeof d.answer === 'string' ? d.answer : '',
+      charLimit: isFinite(rawLimit) && rawLimit >= 0 ? Math.floor(rawLimit) : 0,
+    }];
+  } else {
+    qaItems = [makeEmptyQA()];
+  }
+
+  return {
+    id: typeof d.id === 'string' && d.id ? d.id : uid(),
     status,
     memo: typeof d.memo === 'string' ? d.memo : '',
     createdAt: typeof d.createdAt === 'string' && d.createdAt ? d.createdAt : t,
     updatedAt: typeof d.updatedAt === 'string' && d.updatedAt ? d.updatedAt : t,
+    qaItems,
   };
 }
 
@@ -1086,7 +1120,9 @@ function CompanyViewScreen({ company, globalFields, onEdit, onBack, onToggleTask
           ) : (
             <View style={vS.card}>
               {entrySheets.map((es, i) => {
-                const over = es.charLimit > 0 && es.answer.length > es.charLimit;
+                const qaItems = es.qaItems ?? [];
+                const firstQ = qaItems[0];
+                const hasOver = qaItems.some(q => q.charLimit > 0 && q.answer.length > q.charLimit);
                 return (
                   <TouchableOpacity
                     key={es.id}
@@ -1096,14 +1132,14 @@ function CompanyViewScreen({ company, globalFields, onEdit, onBack, onToggleTask
                   >
                     <View style={esVS.esRowBody}>
                       <Text style={esVS.esQuestion} numberOfLines={2}>
-                        {es.question || '（設問未入力）'}
+                        {firstQ?.question || '（設問未入力）'}
                       </Text>
                       <View style={esVS.esMeta}>
                         <View style={[esVS.statusBadge, { backgroundColor: ES_STATUS_COLOR[es.status] }]}>
                           <Text style={esVS.statusBadgeText}>{es.status}</Text>
                         </View>
-                        <Text style={[esVS.charInfo, over && esVS.charInfoOver]}>
-                          {es.answer.length}{es.charLimit > 0 ? ` / ${es.charLimit}字` : '字'}
+                        <Text style={[esVS.charInfo, hasOver && esVS.charInfoOver]}>
+                          {qaItems.length}項目
                         </Text>
                       </View>
                     </View>
@@ -1927,6 +1963,157 @@ const dS = StyleSheet.create({
   bottomPad: { height: 32 },
 });
 
+// ─── QAItem ───────────────────────────────────────────────────────────────────
+
+interface QAItemProps {
+  qa: ESQAItem;
+  index: number;
+  onUpdate: (qa: ESQAItem) => void;
+  onDelete: () => void;
+}
+
+function QAItem({ qa, index, onUpdate, onDelete }: QAItemProps) {
+  const [expanded, setExpanded] = useState(index === 0);
+  const [limitText, setLimitText] = useState(qa.charLimit > 0 ? String(qa.charLimit) : '');
+
+  const charCount = qa.answer.length;
+  const parsedLimit = parseInt(limitText, 10);
+  const effectiveLimit = limitText.trim() === '' || isNaN(parsedLimit) ? 0 : parsedLimit;
+  const overLimit = effectiveLimit > 0 && charCount > effectiveLimit;
+
+  const handleLimitChange = (v: string) => {
+    setLimitText(v);
+    const parsed = parseInt(v, 10);
+    onUpdate({ ...qa, charLimit: v.trim() === '' || isNaN(parsed) ? 0 : parsed });
+  };
+
+  return (
+    <View style={qaS.card}>
+      <TouchableOpacity style={qaS.header} onPress={() => setExpanded(e => !e)} activeOpacity={0.7}>
+        <View style={qaS.indexBadge}>
+          <Text style={qaS.indexBadgeText}>Q{index + 1}</Text>
+        </View>
+        <Text style={qaS.questionPreview} numberOfLines={1}>
+          {qa.question || '（設問未入力）'}
+        </Text>
+        <Text style={[qaS.charBadge, overLimit && qaS.charBadgeOver]}>
+          {charCount}{effectiveLimit > 0 ? `/${effectiveLimit}字` : '字'}
+        </Text>
+        <Text style={qaS.chevron}>{expanded ? '▲' : '▼'}</Text>
+      </TouchableOpacity>
+
+      {expanded && (
+        <View style={qaS.body}>
+          <Text style={qaS.label}>設問</Text>
+          <TextInput
+            style={[qaS.input, qaS.inputMulti]}
+            value={qa.question}
+            onChangeText={v => onUpdate({ ...qa, question: v })}
+            placeholder="設問をここに入力してください"
+            placeholderTextColor={C.muted}
+            multiline
+            textAlignVertical="top"
+          />
+
+          <Text style={qaS.label}>文字数制限（任意）</Text>
+          <TextInput
+            style={qaS.input}
+            value={limitText}
+            onChangeText={handleLimitChange}
+            placeholder="例：400（なければ空欄）"
+            placeholderTextColor={C.muted}
+            keyboardType="number-pad"
+          />
+
+          <View style={qaS.answerHeader}>
+            <Text style={qaS.label}>回答</Text>
+            <Text style={[qaS.charCounter, overLimit && qaS.charCounterOver]}>
+              {charCount}{effectiveLimit > 0 ? ` / ${effectiveLimit}字` : '字'}
+            </Text>
+          </View>
+          <TextInput
+            style={[qaS.input, qaS.inputAnswer]}
+            value={qa.answer}
+            onChangeText={v => onUpdate({ ...qa, answer: v })}
+            placeholder="回答を入力してください"
+            placeholderTextColor={C.muted}
+            multiline
+            textAlignVertical="top"
+          />
+          {overLimit && (
+            <Text style={qaS.overLimitMsg}>
+              文字数制限を {charCount - effectiveLimit} 字超過しています
+            </Text>
+          )}
+
+          <TouchableOpacity style={qaS.deleteBtn} onPress={onDelete}>
+            <Text style={qaS.deleteBtnText}>この設問を削除</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+}
+
+const qaS = StyleSheet.create({
+  card: {
+    backgroundColor: '#F8F8F8',
+    borderRadius: 10,
+    marginBottom: 8,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+  },
+  indexBadge: {
+    backgroundColor: C.primary,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    marginRight: 10,
+  },
+  indexBadgeText: { color: C.card, fontSize: 12, fontWeight: 'bold' },
+  questionPreview: { flex: 1, fontSize: 14, color: C.text },
+  charBadge: { fontSize: 12, color: C.light, marginRight: 8 },
+  charBadgeOver: { color: C.danger, fontWeight: 'bold' },
+  chevron: { fontSize: 11, color: C.muted },
+  body: {
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+  },
+  label: { fontSize: 12, color: C.sub, marginTop: 10, marginBottom: 4 },
+  answerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  charCounter: { fontSize: 12, color: C.light, fontWeight: '600' },
+  charCounterOver: { color: C.danger },
+  input: {
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: C.text,
+    backgroundColor: C.card,
+  },
+  inputMulti: { minHeight: 72, textAlignVertical: 'top' },
+  inputAnswer: { minHeight: 160, textAlignVertical: 'top', lineHeight: 22 },
+  overLimitMsg: { marginTop: 4, fontSize: 12, color: C.danger, fontWeight: 'bold' },
+  deleteBtn: { marginTop: 12, alignItems: 'center', paddingVertical: 8 },
+  deleteBtnText: { color: C.danger, fontSize: 13 },
+});
+
 // ─── ESEditScreen ─────────────────────────────────────────────────────────────
 
 interface ESEditScreenProps {
@@ -1941,13 +2128,9 @@ interface ESEditScreenProps {
 function ESEditScreen({ es, isNew, companyName, onSave, onDelete, onBack }: ESEditScreenProps) {
   const [form, setForm] = useState<ESItem>(es);
   const [showStatusPicker, setShowStatusPicker] = useState(false);
-  const [charLimitText, setCharLimitText] = useState(es.charLimit > 0 ? String(es.charLimit) : '');
   const originalRef = useRef(JSON.stringify(es));
 
-  const set = <K extends keyof ESItem>(key: K, value: ESItem[K]) =>
-    setForm(f => ({ ...f, [key]: value }));
-
-  const isDirty = () => JSON.stringify(form) !== originalRef.current || charLimitText !== (es.charLimit > 0 ? String(es.charLimit) : '');
+  const isDirty = () => JSON.stringify(form) !== originalRef.current;
 
   const handleBack = () => {
     if (isDirty()) {
@@ -1961,13 +2144,7 @@ function ESEditScreen({ es, isNew, companyName, onSave, onDelete, onBack }: ESEd
   };
 
   const handleSave = () => {
-    if (!form.question.trim()) {
-      Alert.alert('エラー', '設問を入力してください。');
-      return;
-    }
-    const parsed = parseInt(charLimitText, 10);
-    const limit = charLimitText.trim() === '' || isNaN(parsed) ? 0 : parsed;
-    const updated: ESItem = { ...form, charLimit: limit, updatedAt: nowISO() };
+    const updated: ESItem = { ...form, updatedAt: nowISO() };
     onSave(updated);
     originalRef.current = JSON.stringify(updated);
     onBack();
@@ -1980,10 +2157,22 @@ function ESEditScreen({ es, isNew, companyName, onSave, onDelete, onBack }: ESEd
     ]);
   };
 
-  const charCount = form.answer.length;
-  const parsedLimit = parseInt(charLimitText, 10);
-  const effectiveLimit = charLimitText.trim() === '' || isNaN(parsedLimit) ? 0 : parsedLimit;
-  const overLimit = effectiveLimit > 0 && charCount > effectiveLimit;
+  const addQA = () =>
+    setForm(f => ({ ...f, qaItems: [...(f.qaItems ?? []), makeEmptyQA()] }));
+
+  const updateQA = (id: string, qa: ESQAItem) =>
+    setForm(f => ({ ...f, qaItems: (f.qaItems ?? []).map(q => q.id === id ? qa : q) }));
+
+  const deleteQA = (id: string) => {
+    Alert.alert('設問を削除', 'この設問と回答を削除しますか？', [
+      { text: 'キャンセル', style: 'cancel' },
+      { text: '削除', style: 'destructive', onPress: () =>
+        setForm(f => ({ ...f, qaItems: (f.qaItems ?? []).filter(q => q.id !== id) }))
+      },
+    ]);
+  };
+
+  const qaItems = form.qaItems ?? [];
 
   return (
     <View style={esS.root}>
@@ -2008,60 +2197,31 @@ function ESEditScreen({ es, isNew, companyName, onSave, onDelete, onBack }: ESEd
             <Text style={esS.selectValue}>{form.status}</Text>
             <Text style={esS.selectArrow}>▼</Text>
           </TouchableOpacity>
-
-          <Text style={esS.fieldLabel}>文字数制限（任意）</Text>
-          <TextInput
-            style={esS.input}
-            value={charLimitText}
-            onChangeText={setCharLimitText}
-            placeholder="例：400（なければ空欄）"
-            placeholderTextColor={C.muted}
-            keyboardType="number-pad"
-          />
         </View>
 
-        <Text style={esS.sectionTitle}>設問</Text>
-        <View style={esS.section}>
-          <TextInput
-            style={[esS.input, esS.inputMulti]}
-            value={form.question}
-            onChangeText={v => set('question', v)}
-            placeholder="設問をここに入力してください"
-            placeholderTextColor={C.muted}
-            multiline
-            textAlignVertical="top"
+        <Text style={esS.sectionTitle}>設問・回答</Text>
+        {qaItems.length === 0 && (
+          <Text style={esS.emptyQA}>設問がありません。下のボタンから追加してください。</Text>
+        )}
+        {qaItems.map((qa, i) => (
+          <QAItem
+            key={qa.id}
+            qa={qa}
+            index={i}
+            onUpdate={updated => updateQA(qa.id, updated)}
+            onDelete={() => deleteQA(qa.id)}
           />
-        </View>
-
-        <View style={esS.sectionTitleRow}>
-          <Text style={esS.sectionTitle}>回答</Text>
-          <Text style={[esS.charCounter, overLimit && esS.charCounterOver]}>
-            {charCount}{effectiveLimit > 0 ? ` / ${effectiveLimit}字` : '字'}
-          </Text>
-        </View>
-        <View style={esS.section}>
-          <TextInput
-            style={[esS.input, esS.inputAnswer]}
-            value={form.answer}
-            onChangeText={v => set('answer', v)}
-            placeholder="回答を入力してください"
-            placeholderTextColor={C.muted}
-            multiline
-            textAlignVertical="top"
-          />
-          {overLimit && (
-            <Text style={esS.overLimitMsg}>
-              文字数制限を {charCount - effectiveLimit} 字超過しています
-            </Text>
-          )}
-        </View>
+        ))}
+        <TouchableOpacity style={esS.addQABtn} onPress={addQA}>
+          <Text style={esS.addQABtnText}>＋ 設問・回答を追加</Text>
+        </TouchableOpacity>
 
         <Text style={esS.sectionTitle}>メモ</Text>
         <View style={esS.section}>
           <TextInput
             style={[esS.input, esS.inputMemo]}
             value={form.memo}
-            onChangeText={v => set('memo', v)}
+            onChangeText={v => setForm(f => ({ ...f, memo: v }))}
             placeholder="参考にしたこと・修正ポイントなど"
             placeholderTextColor={C.muted}
             multiline
@@ -2090,7 +2250,7 @@ function ESEditScreen({ es, isNew, companyName, onSave, onDelete, onBack }: ESEd
         title="ステータスを選択"
         options={ES_STATUS_OPTIONS}
         value={form.status}
-        onSelect={v => set('status', v as ESStatus)}
+        onSelect={v => setForm(f => ({ ...f, status: v as ESStatus }))}
         onClose={() => setShowStatusPicker(false)}
       />
     </View>
@@ -2127,15 +2287,6 @@ const esS = StyleSheet.create({
     marginTop: 16,
     marginBottom: 8,
   },
-  sectionTitleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  charCounter: { fontSize: 14, color: C.light, fontWeight: '600' },
-  charCounterOver: { color: C.danger },
   section: {
     backgroundColor: C.card,
     borderRadius: 12,
@@ -2152,8 +2303,6 @@ const esS = StyleSheet.create({
     color: C.text,
     backgroundColor: '#FAFAFA',
   },
-  inputMulti: { minHeight: 80, textAlignVertical: 'top' },
-  inputAnswer: { minHeight: 200, textAlignVertical: 'top', lineHeight: 22 },
   inputMemo: { minHeight: 80, textAlignVertical: 'top' },
   selectBtn: {
     borderWidth: 1,
@@ -2168,7 +2317,17 @@ const esS = StyleSheet.create({
   statusDot: { width: 10, height: 10, borderRadius: 5, marginRight: 8 },
   selectValue: { flex: 1, fontSize: 14, color: C.text },
   selectArrow: { fontSize: 11, color: C.muted },
-  overLimitMsg: { marginTop: 6, fontSize: 12, color: C.danger, fontWeight: 'bold' },
+  emptyQA: { fontSize: 13, color: C.muted, textAlign: 'center', marginBottom: 8 },
+  addQABtn: {
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: C.primary,
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  addQABtnText: { color: C.primary, fontSize: 14 },
   metaRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 16, paddingHorizontal: 4 },
   metaText: { fontSize: 11, color: C.muted },
   deleteBtn: {
