@@ -65,7 +65,7 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		320F24022F973E7F00421B18 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+		320F24022F973E7F00421B18 /* Exceptions for "StreakWidget" folder in "StreakWidgetExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -75,7 +75,18 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		320F23F02F973E7E00421B18 /* StreakWidget */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (320F24022F973E7F00421B18 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = StreakWidget; sourceTree = "<group>"; };
+		320F23F02F973E7E00421B18 /* StreakWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				320F24022F973E7F00421B18 /* Exceptions for "StreakWidget" folder in "StreakWidgetExtension" target */,
+			);
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = StreakWidget;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -209,8 +220,6 @@
 				320F23F02F973E7E00421B18 /* StreakWidget */,
 			);
 			name = StreakWidgetExtension;
-			packageProductDependencies = (
-			);
 			productName = StreakWidgetExtension;
 			productReference = 320F23EB2F973E7E00421B18 /* StreakWidgetExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
@@ -304,13 +313,9 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-megale_varka/Pods-megale_varka-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			inputPaths = (
-			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-megale_varka/Pods-megale_varka-frameworks-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -347,13 +352,9 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-megale_varka/Pods-megale_varka-resources-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			inputPaths = (
-			);
 			name = "[CP] Copy Pods Resources";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-megale_varka/Pods-megale_varka-resources-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
