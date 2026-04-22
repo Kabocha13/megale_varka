@@ -4,6 +4,7 @@ import { StyleSheet, Text, View } from 'react-native';
 export interface HBarItem {
   label: string;
   value: number;
+  valueLabel?: string;
 }
 
 interface Props {
@@ -38,7 +39,7 @@ export default function HorizontalBarChart({
                 ]}
               />
             </View>
-            <Text style={styles.value}>{item.value}</Text>
+            <Text style={styles.value}>{item.valueLabel ?? item.value}</Text>
           </View>
         );
       })}
@@ -70,7 +71,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   value: {
-    width: 28,
+    width: 58,
     fontSize: 11,
     color: '#555555',
     textAlign: 'right',

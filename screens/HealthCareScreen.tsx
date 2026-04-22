@@ -180,6 +180,7 @@ export default function HealthCareScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [alreadySaved, setAlreadySaved] = useState(false);
+  const [existingIsRetroactive, setExistingIsRetroactive] = useState(false);
   const [selectedDate, setSelectedDate] = useState(today);
 
   const [mood, setMood] = useState<Mood | null>(null);
@@ -239,6 +240,7 @@ export default function HealthCareScreen() {
       setLoading(true);
       // Reset form to defaults so switching dates doesn't carry stale values.
       setAlreadySaved(false);
+      setExistingIsRetroactive(false);
       setMood(null);
       setSymptoms([]);
       setOtherNote('');
@@ -274,6 +276,7 @@ export default function HealthCareScreen() {
           if (!cancelled && snap.exists()) {
             const data = snap.data();
             setAlreadySaved(true);
+            setExistingIsRetroactive(data.isRetroactive === true);
             setStatsAvailable(true);
             if (data.mood) { setMood(data.mood as Mood); }
             if (data.symptoms) { setSymptoms(data.symptoms); }
@@ -297,7 +300,7 @@ export default function HealthCareScreen() {
             }
           }
         }
-      } catch (_) {
+      } catch {
         // silently ignore load errors
       } finally {
         if (!cancelled) {
@@ -325,6 +328,7 @@ export default function HealthCareScreen() {
     }
     setSaving(true);
     const sleepHours = calcSleepHours(bedTime, wakeTime);
+    const shouldExcludeFromStreak = isRetroactive && (!alreadySaved || existingIsRetroactive);
     try {
       await setDoc(doc(db, 'users', uid, 'healthRecords', selectedDate), {
         date: selectedDate,
@@ -340,10 +344,11 @@ export default function HealthCareScreen() {
         steps,
         activeCalories,
         dailyAnswer,
-        isRetroactive,
+        isRetroactive: shouldExcludeFromStreak,
         updatedAt: serverTimestamp(),
       });
       setAlreadySaved(true);
+      setExistingIsRetroactive(shouldExcludeFromStreak);
       setStatsAvailable(true);
       setStatsKey(k => k + 1); // force stats refresh next reveal
       if (isRetroactive) {
@@ -354,7 +359,7 @@ export default function HealthCareScreen() {
       } else {
         animateFormOut();
       }
-    } catch (_) {
+    } catch {
       Alert.alert('エラー', '保存に失敗しました。再度お試しください。');
     } finally {
       setSaving(false);
@@ -433,7 +438,9 @@ export default function HealthCareScreen() {
       {isRetroactive && (
         <View style={s.retroBanner}>
           <Text style={s.retroBannerText}>
-            遡って記録中です。連続記録には加算されません。
+            {alreadySaved && !existingIsRetroactive
+              ? '過去の記録を更新中です。連続記録は維持されます。'
+              : '遡って記録中です。連続記録には加算されません。'}
           </Text>
         </View>
       )}

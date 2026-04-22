@@ -47,6 +47,64 @@ function buildContinuousWindow(
   return out;
 }
 
+function buildSymptomFrequencies(
+  records: HealthStats['records'],
+  days: number,
+): { label: string; value: number; valueLabel: string }[] {
+  const symMap = new Map<string, number>();
+
+  records.forEach(record => {
+    (record.symptoms ?? []).forEach(symptom => {
+      symMap.set(symptom, (symMap.get(symptom) ?? 0) + 1);
+    });
+  });
+
+  return Array.from(symMap.entries())
+    .map(([label, value]) => ({
+      label,
+      value,
+      valueLabel: `${value}日 ${Math.round((value / days) * 100)}%`,
+    }))
+    .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label, 'ja'));
+}
+
+function avg(nums: number[]): number | null {
+  if (nums.length === 0) { return null; }
+  return nums.reduce((sum, n) => sum + n, 0) / nums.length;
+}
+
+function clamp(n: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, n));
+}
+
+function calculateHealthScore(
+  records: HealthStats['records'],
+  days: number,
+  avgMood: number | null,
+  avgSleepHours: number | null,
+): number {
+  if (records.length === 0) { return 0; }
+
+  const recordScore = (records.length / days) * 100;
+  const moodScore = avgMood !== null ? ((avgMood - 1) / 4) * 100 : 50;
+  const sleepScore = avgSleepHours !== null
+    ? (1 - Math.min(Math.abs(avgSleepHours - 7.5) / 7.5, 1)) * 100
+    : 50;
+  const symptomScore = (
+    records.reduce((sum, record) => sum + (record.symptoms?.length ?? 0), 0) / days
+  );
+  const normalizedSymptomScore = clamp(100 - symptomScore * 25, 0, 100);
+  const noAlcoholScore = (records.filter(record => record.alcohol !== true).length / records.length) * 100;
+
+  return Math.round(
+    recordScore * 0.2
+    + moodScore * 0.3
+    + sleepScore * 0.25
+    + normalizedSymptomScore * 0.15
+    + noAlcoholScore * 0.1,
+  );
+}
+
 export default function HealthStatsScreen({ uid, onEdit }: Props) {
   const [stats, setStats] = useState<HealthStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -96,6 +154,31 @@ export default function HealthStatsScreen({ uid, onEdit }: Props) {
   }));
 
   const alcoholInWindow = windowed.filter(w => w.record?.alcohol === true).length;
+  const recordsInWindow = windowed
+    .map(w => w.record)
+    .filter((record): record is HealthStats['records'][number] => Boolean(record));
+  const avgMoodInWindow = avg(
+    recordsInWindow
+      .map(record => record.mood)
+      .filter((value): value is number => typeof value === 'number'),
+  );
+  const avgSleepInWindow = avg(
+    recordsInWindow
+      .map(record => record.sleepHours)
+      .filter((value): value is number => typeof value === 'number' && value > 0),
+  );
+  const healthScore = calculateHealthScore(
+    recordsInWindow,
+    windowDays,
+    avgMoodInWindow,
+    avgSleepInWindow,
+  );
+  const jobSearchScore = 13;
+  const overallScore = Math.round((healthScore + jobSearchScore) / 2);
+  const symptomFrequencies = buildSymptomFrequencies(
+    recordsInWindow,
+    windowDays,
+  );
 
   return (
     <ScrollView style={s.container} contentContainerStyle={s.content}>
@@ -112,23 +195,19 @@ export default function HealthStatsScreen({ uid, onEdit }: Props) {
       {/* Summary */}
       <View style={s.summaryRow}>
         <View style={[s.summaryCard, s.streakCard]}>
-          <Text style={s.summaryIcon}>🔥</Text>
-          <Text style={s.summaryValue}>{stats.streak}</Text>
-          <Text style={s.summaryLabel}>連続記録日</Text>
+          <Text style={s.summaryIcon}>⭐</Text>
+          <Text style={s.summaryValue}>{overallScore}</Text>
+          <Text style={s.summaryLabel}>総合スコア</Text>
         </View>
         <View style={s.summaryCard}>
-          <Text style={s.summaryIcon}>😊</Text>
-          <Text style={s.summaryValue}>
-            {stats.avgMood !== null ? stats.avgMood.toFixed(1) : '--'}
-          </Text>
-          <Text style={s.summaryLabel}>平均気分(7日)</Text>
+          <Text style={s.summaryIcon}>💚</Text>
+          <Text style={s.summaryValue}>{healthScore}</Text>
+          <Text style={s.summaryLabel}>健康スコア</Text>
         </View>
         <View style={s.summaryCard}>
-          <Text style={s.summaryIcon}>😴</Text>
-          <Text style={s.summaryValue}>
-            {stats.avgSleepHours !== null ? stats.avgSleepHours.toFixed(1) : '--'}
-          </Text>
-          <Text style={s.summaryLabel}>平均睡眠(h)</Text>
+          <Text style={s.summaryIcon}>💼</Text>
+          <Text style={s.summaryValue}>{jobSearchScore}</Text>
+          <Text style={s.summaryLabel}>就活スコア</Text>
         </View>
       </View>
 
@@ -148,7 +227,12 @@ export default function HealthStatsScreen({ uid, onEdit }: Props) {
       </View>
 
       {/* Mood line chart */}
-      <Text style={s.sectionTitle}>気分の推移</Text>
+      <View style={s.sectionHeader}>
+        <Text style={s.sectionHeaderTitle}>気分の推移</Text>
+        <Text style={s.sectionMetric}>
+          平均 {avgMoodInWindow !== null ? avgMoodInWindow.toFixed(1) : '--'}
+        </Text>
+      </View>
       <View style={s.card}>
         <LineChart
           data={moodPoints}
@@ -161,7 +245,12 @@ export default function HealthStatsScreen({ uid, onEdit }: Props) {
       </View>
 
       {/* Sleep line chart */}
-      <Text style={s.sectionTitle}>睡眠時間(時間)</Text>
+      <View style={s.sectionHeader}>
+        <Text style={s.sectionHeaderTitle}>睡眠時間(時間)</Text>
+        <Text style={s.sectionMetric}>
+          平均 {avgSleepInWindow !== null ? `${avgSleepInWindow.toFixed(1)}h` : '--'}
+        </Text>
+      </View>
       <View style={s.card}>
         <LineChart
           data={sleepPoints}
@@ -174,14 +263,15 @@ export default function HealthStatsScreen({ uid, onEdit }: Props) {
       </View>
 
       {/* Symptoms */}
-      <Text style={s.sectionTitle}>症状の頻度(30日間)</Text>
+      <Text style={s.sectionTitle}>症状の頻度({windowDays}日間)</Text>
       <View style={s.card}>
-        {stats.symptomCounts.length === 0 ? (
+        {symptomFrequencies.length === 0 ? (
           <Text style={s.emptyText}>症状の記録はありません</Text>
         ) : (
           <HorizontalBarChart
-            data={stats.symptomCounts.map(s2 => ({ label: s2.label, value: s2.count }))}
+            data={symptomFrequencies}
             color="#C77D7D"
+            maxValue={windowDays}
           />
         )}
       </View>
@@ -309,6 +399,23 @@ const s = StyleSheet.create({
     color: C.sub,
     marginBottom: 5,
     marginTop: 12,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 12,
+    marginBottom: 5,
+  },
+  sectionHeaderTitle: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: C.sub,
+  },
+  sectionMetric: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: C.primary,
   },
   card: {
     backgroundColor: C.card,
