@@ -31,6 +31,10 @@ import {
   requestNotificationPermission,
   scheduleTaskNotification,
 } from '../services/notifications';
+import {
+  JOB_COMPANIES_STORAGE_KEY,
+  withUpdatedCompanyProgress,
+} from '../services/jobSearchProgress';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -62,6 +66,7 @@ interface Company {
   tasks: Task[];
   globalFieldValues: Record<string, string>;
   memo: string;
+  progressXp?: number;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -86,7 +91,7 @@ const SELECTION_STATUS_OPTIONS: string[] = [
   '不合格',
   '選考辞退',
 ];
-const STORAGE_KEY = '@job_companies_v1';
+const STORAGE_KEY = JOB_COMPANIES_STORAGE_KEY;
 const GLOBAL_FIELDS_KEY = '@job_global_fields_v1';
 
 const C = {
@@ -125,7 +130,7 @@ const GOAL_COLOR: Record<GoalType, string> = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function uid(): string {
+function makeUid(): string {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
@@ -143,7 +148,7 @@ function toStringRecord(value: Record<string, unknown>): Record<string, string> 
 
 function makeEmptyCompany(): Company {
   return {
-    id: uid(),
+    id: makeUid(),
     name: '',
     myPageUrl: '',
     myPageLoginId: '',
@@ -272,7 +277,7 @@ function GlobalFieldsModal({ visible, fields, onUpdate, onClose }: GlobalFieldsM
       Alert.alert('重複', `「${label}」はすでに追加されています。`);
       return;
     }
-    setDraft(d => [...d, { id: uid(), label }]);
+    setDraft(d => [...d, { id: makeUid(), label }]);
     setNewLabel('');
   };
 
@@ -1507,7 +1512,7 @@ function CompanyDetailScreen({ company, isNew, globalFields, onUpdateGlobalField
   };
 
   const addTask = () =>
-    set('tasks', [...form.tasks, { id: uid(), title: '', deadline: '', time: '23:59', submissionUrl: '', completed: false }]);
+    set('tasks', [...form.tasks, { id: makeUid(), title: '', deadline: '', time: '23:59', submissionUrl: '', completed: false }]);
 
   const updateTask = (id: string, t: Task) =>
     set('tasks', form.tasks.map(x => x.id === id ? t : x));
@@ -1875,6 +1880,7 @@ function JobManagementScreen() {
             tasks: Array.isArray(data.tasks) ? data.tasks : [],
             globalFieldValues: isPlainObject(data.globalFieldValues) ? toStringRecord(data.globalFieldValues) : {},
             memo: data.memo ?? '',
+            progressXp: typeof data.progressXp === 'number' ? data.progressXp : undefined,
           } as Company;
         });
         setCompanies(loaded);
@@ -1887,18 +1893,23 @@ function JobManagementScreen() {
 
   // 企業を保存（追加・更新）
   const saveCompany = useCallback((company: Company) => {
+    const existingCompany = companies.find(c => c.id === company.id);
+    const nextCompany = withUpdatedCompanyProgress({
+      ...company,
+      progressXp: Math.max(company.progressXp ?? 0, existingCompany?.progressXp ?? 0),
+    });
     setCompanies(prev => {
-      const next = prev.find(c => c.id === company.id)
-        ? prev.map(c => c.id === company.id ? company : c)
-        : [...prev, company];
+      const next = prev.find(c => c.id === nextCompany.id)
+        ? prev.map(c => c.id === nextCompany.id ? nextCompany : c)
+        : [...prev, nextCompany];
       if (isDemo) AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => {});
       return next;
     });
     if (!isDemo && uid) {
-      setDoc(doc(db, 'users', uid, 'job_companies', company.id), company).catch(() => {});
+      setDoc(doc(db, 'users', uid, 'job_companies', nextCompany.id), nextCompany).catch(() => {});
     }
-    syncNotifications(company);
-  }, [uid, isDemo, syncNotifications]);
+    syncNotifications(nextCompany);
+  }, [uid, isDemo, companies, syncNotifications]);
 
   // 企業を削除
   const removeCompany = useCallback((companyId: string, tasks: Task[]) => {
