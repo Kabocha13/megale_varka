@@ -11,6 +11,8 @@ import MaterialIcons from '@react-native-vector-icons/material-icons';
 import LineChart, { LinePoint } from '../components/charts/LineChart';
 import HorizontalBarChart from '../components/charts/HorizontalBarChart';
 import StackedBar, { StackSegment } from '../components/charts/StackedBar';
+import { useAuth } from '../context/AuthContext';
+import { fetchJobSearchProgress } from '../services/jobSearchProgress';
 import { AppetiteValue, fetchHealthStats, HealthStats } from '../services/statsService';
 
 interface Props {
@@ -109,7 +111,9 @@ function calculateHealthScore(
 }
 
 export default function HealthStatsScreen({ uid, onEdit }: Props) {
+  const { isDemo } = useAuth();
   const [stats, setStats] = useState<HealthStats | null>(null);
+  const [jobSearchScore, setJobSearchScore] = useState(0);
   const [loading, setLoading] = useState(true);
   const [windowDays, setWindowDays] = useState<7 | 30>(7);
 
@@ -118,14 +122,20 @@ export default function HealthStatsScreen({ uid, onEdit }: Props) {
     (async () => {
       setLoading(true);
       try {
-        const s = await fetchHealthStats(uid, 30);
-        if (!cancelled) { setStats(s); }
+        const [s, jobProgress] = await Promise.all([
+          fetchHealthStats(uid, 30),
+          fetchJobSearchProgress(uid, isDemo),
+        ]);
+        if (!cancelled) {
+          setStats(s);
+          setJobSearchScore(jobProgress.score);
+        }
       } finally {
         if (!cancelled) { setLoading(false); }
       }
     })();
     return () => { cancelled = true; };
-  }, [uid]);
+  }, [uid, isDemo]);
 
   if (loading || !stats) {
     return (
@@ -176,7 +186,6 @@ export default function HealthStatsScreen({ uid, onEdit }: Props) {
     avgMoodInWindow,
     avgSleepInWindow,
   );
-  const jobSearchScore = 13;
   const overallScore = Math.round((healthScore + jobSearchScore) / 2);
   const symptomFrequencies = buildSymptomFrequencies(
     recordsInWindow,
@@ -210,7 +219,7 @@ export default function HealthStatsScreen({ uid, onEdit }: Props) {
         <View style={s.summaryCard}>
           <MaterialIcons name="business-center" size={24} color="#7C6A4A" style={s.summaryIcon} />
           <Text style={s.summaryValue}>{jobSearchScore}</Text>
-          <Text style={s.summaryLabel}>就活スコア</Text>
+          <Text style={s.summaryLabel}>就活経験値</Text>
         </View>
       </View>
 
