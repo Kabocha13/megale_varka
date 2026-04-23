@@ -13,6 +13,7 @@
     "@kingstinct/react-native-healthkit": "^14.0.0",
     "@notifee/react-native": "^9.1.8",
     "@react-native-async-storage/async-storage": "^3.0.2",
+    "@react-native-clipboard/clipboard": "^1.16.3",
     "@react-native-community/datetimepicker": "^9.1.0",
     "@react-native-vector-icons/material-icons": "^13.1.0",
     "@react-native/new-app-screen": "0.85.1",

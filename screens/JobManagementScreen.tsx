@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Clipboard from '@react-native-clipboard/clipboard';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -2007,13 +2008,11 @@ function QAItem({ qa, index, onUpdate, onDelete }: QAItemProps) {
         <View style={qaS.body}>
           <Text style={qaS.label}>設問</Text>
           <TextInput
-            style={[qaS.input, qaS.inputMulti]}
+            style={qaS.input}
             value={qa.question}
             onChangeText={v => onUpdate({ ...qa, question: v })}
             placeholder="設問をここに入力してください"
             placeholderTextColor={C.muted}
-            multiline
-            textAlignVertical="top"
           />
 
           <Text style={qaS.label}>文字数制限（任意）</Text>
@@ -2028,9 +2027,21 @@ function QAItem({ qa, index, onUpdate, onDelete }: QAItemProps) {
 
           <View style={qaS.answerHeader}>
             <Text style={qaS.label}>回答</Text>
-            <Text style={[qaS.charCounter, overLimit && qaS.charCounterOver]}>
-              {charCount}{effectiveLimit > 0 ? ` / ${effectiveLimit}字` : '字'}
-            </Text>
+            <View style={qaS.answerHeaderRight}>
+              <Text style={[qaS.charCounter, overLimit && qaS.charCounterOver]}>
+                {charCount}{effectiveLimit > 0 ? ` / ${effectiveLimit}字` : '字'}
+              </Text>
+              <TouchableOpacity
+                style={qaS.copyBtn}
+                onPress={() => {
+                  Clipboard.setString(qa.answer);
+                  Alert.alert('コピーしました', '回答をクリップボードにコピーしました。');
+                }}
+                accessibilityLabel="回答をコピー"
+              >
+                <Text style={qaS.copyBtnText}>コピー</Text>
+              </TouchableOpacity>
+            </View>
           </View>
           <TextInput
             style={[qaS.input, qaS.inputAnswer]}
@@ -2096,8 +2107,16 @@ const qaS = StyleSheet.create({
     marginTop: 10,
     marginBottom: 4,
   },
+  answerHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   charCounter: { fontSize: 12, color: C.light, fontWeight: '600' },
   charCounterOver: { color: C.danger },
+  copyBtn: {
+    backgroundColor: C.primary,
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+  },
+  copyBtnText: { color: C.card, fontSize: 12, fontWeight: 'bold' },
   input: {
     borderWidth: 1,
     borderColor: C.border,
