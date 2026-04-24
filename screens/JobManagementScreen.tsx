@@ -171,12 +171,12 @@ function formatDateShort(iso: string): string {
 }
 
 function makeEmptyQA(): ESQAItem {
-  return { id: uid(), question: '', answer: '', charLimit: 0 };
+  return { id: makeUid(), question: '', answer: '', charLimit: 0 };
 }
 
 function makeEmptyES(): ESItem {
   const t = nowISO();
-  return { id: uid(), status: '下書き', createdAt: t, updatedAt: t, qaItems: [makeEmptyQA()] };
+  return { id: makeUid(), status: '下書き', createdAt: t, updatedAt: t, qaItems: [makeEmptyQA()] };
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -211,7 +211,7 @@ function normalizeQA(data: unknown): ESQAItem {
   const d = isPlainObject(data) ? data : {};
   const rawLimit = typeof d.charLimit === 'number' ? d.charLimit : parseInt(String(d.charLimit ?? ''), 10);
   return {
-    id: typeof d.id === 'string' && d.id ? d.id : uid(),
+    id: typeof d.id === 'string' && d.id ? d.id : makeUid(),
     question: typeof d.question === 'string' ? d.question : '',
     answer: typeof d.answer === 'string' ? d.answer : '',
     charLimit: isFinite(rawLimit) && rawLimit >= 0 ? Math.floor(rawLimit) : 0,
@@ -230,7 +230,7 @@ function normalizeES(data: unknown): ESItem {
   } else if (typeof d.question === 'string' && d.question) {
     const rawLimit = typeof d.charLimit === 'number' ? d.charLimit : parseInt(String(d.charLimit ?? ''), 10);
     qaItems = [{
-      id: uid(),
+      id: makeUid(),
       question: d.question,
       answer: typeof d.answer === 'string' ? d.answer : '',
       charLimit: isFinite(rawLimit) && rawLimit >= 0 ? Math.floor(rawLimit) : 0,
@@ -240,7 +240,7 @@ function normalizeES(data: unknown): ESItem {
   }
 
   return {
-    id: typeof d.id === 'string' && d.id ? d.id : uid(),
+    id: typeof d.id === 'string' && d.id ? d.id : makeUid(),
     status,
     createdAt: typeof d.createdAt === 'string' && d.createdAt ? d.createdAt : t,
     updatedAt: typeof d.updatedAt === 'string' && d.updatedAt ? d.updatedAt : t,
