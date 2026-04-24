@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Clipboard from '@react-native-clipboard/clipboard';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -55,6 +56,23 @@ interface Task {
   completed: boolean;
 }
 
+type ESStatus = '下書き' | '提出済';
+
+interface ESQAItem {
+  id: string;
+  question: string;
+  answer: string;
+  charLimit: number;
+}
+
+interface ESItem {
+  id: string;
+  status: ESStatus;
+  createdAt: string;
+  updatedAt: string;
+  qaItems: ESQAItem[];
+}
+
 interface Company {
   id: string;
   name: string;
@@ -66,6 +84,7 @@ interface Company {
   tasks: Task[];
   globalFieldValues: Record<string, string>;
   memo: string;
+  entrySheet: ESItem | null;
   progressXp?: number;
 }
 
@@ -128,10 +147,36 @@ const GOAL_COLOR: Record<GoalType, string> = {
   'その他': '#6D4C41',
 };
 
+const ES_STATUS_OPTIONS: ESStatus[] = ['下書き', '提出済'];
+const ES_STATUS_COLOR: Record<ESStatus, string> = {
+  '下書き': '#F59E0B',
+  '提出済': '#4CAF50',
+};
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function makeUid(): string {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
+
+function nowISO(): string {
+  return new Date().toISOString();
+}
+
+function formatDateShort(iso: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function makeEmptyQA(): ESQAItem {
+  return { id: uid(), question: '', answer: '', charLimit: 0 };
+}
+
+function makeEmptyES(): ESItem {
+  const t = nowISO();
+  return { id: uid(), status: '下書き', createdAt: t, updatedAt: t, qaItems: [makeEmptyQA()] };
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -158,6 +203,48 @@ function makeEmptyCompany(): Company {
     tasks: [],
     globalFieldValues: {},
     memo: '',
+    entrySheet: null,
+  };
+}
+
+function normalizeQA(data: unknown): ESQAItem {
+  const d = isPlainObject(data) ? data : {};
+  const rawLimit = typeof d.charLimit === 'number' ? d.charLimit : parseInt(String(d.charLimit ?? ''), 10);
+  return {
+    id: typeof d.id === 'string' && d.id ? d.id : uid(),
+    question: typeof d.question === 'string' ? d.question : '',
+    answer: typeof d.answer === 'string' ? d.answer : '',
+    charLimit: isFinite(rawLimit) && rawLimit >= 0 ? Math.floor(rawLimit) : 0,
+  };
+}
+
+function normalizeES(data: unknown): ESItem {
+  const d = isPlainObject(data) ? data : {};
+  const status = ES_STATUS_OPTIONS.includes(d.status as ESStatus) ? (d.status as ESStatus) : '下書き';
+  const t = nowISO();
+
+  // 旧データ移行: question/answer/charLimit が直接ある場合は qaItems に変換
+  let qaItems: ESQAItem[];
+  if (Array.isArray(d.qaItems) && d.qaItems.length > 0) {
+    qaItems = d.qaItems.map(normalizeQA);
+  } else if (typeof d.question === 'string' && d.question) {
+    const rawLimit = typeof d.charLimit === 'number' ? d.charLimit : parseInt(String(d.charLimit ?? ''), 10);
+    qaItems = [{
+      id: uid(),
+      question: d.question,
+      answer: typeof d.answer === 'string' ? d.answer : '',
+      charLimit: isFinite(rawLimit) && rawLimit >= 0 ? Math.floor(rawLimit) : 0,
+    }];
+  } else {
+    qaItems = [makeEmptyQA()];
+  }
+
+  return {
+    id: typeof d.id === 'string' && d.id ? d.id : uid(),
+    status,
+    createdAt: typeof d.createdAt === 'string' && d.createdAt ? d.createdAt : t,
+    updatedAt: typeof d.updatedAt === 'string' && d.updatedAt ? d.updatedAt : t,
+    qaItems,
   };
 }
 
@@ -941,11 +1028,13 @@ interface CompanyViewScreenProps {
   onEdit: () => void;
   onBack: () => void;
   onToggleTask: (taskId: string, completed: boolean) => void;
+  onNavigateToES: () => void;
 }
 
-function CompanyViewScreen({ company, globalFields, onEdit, onBack, onToggleTask }: CompanyViewScreenProps) {
+function CompanyViewScreen({ company, globalFields, onEdit, onBack, onToggleTask, onNavigateToES }: CompanyViewScreenProps) {
   const pendingTasks = company.tasks.filter(t => !t.completed);
   const doneTasks = company.tasks.filter(t => t.completed);
+  const entrySheet = company.entrySheet ?? null;
 
   return (
     <View style={vS.root}>
@@ -1015,6 +1104,51 @@ function CompanyViewScreen({ company, globalFields, onEdit, onBack, onToggleTask
             </View>
           </View>
         ) : null}
+
+        {/* エントリーシート */}
+        <View style={vS.section}>
+          <View style={esVS.sectionHeader}>
+            <Text style={vS.sectionTitle}>エントリーシート</Text>
+            {entrySheet && (
+              <View style={[esVS.statusBadge, { backgroundColor: ES_STATUS_COLOR[entrySheet.status] }]}>
+                <Text style={esVS.statusBadgeText}>{entrySheet.status}</Text>
+              </View>
+            )}
+            <TouchableOpacity
+              style={esVS.editEsBtn}
+              onPress={onNavigateToES}
+              accessibilityRole="button"
+            >
+              <Text style={esVS.editEsBtnText}>{entrySheet ? '編集' : '作成'}</Text>
+            </TouchableOpacity>
+          </View>
+          {!entrySheet ? (
+            <Text style={vS.emptyText}>まだ作成されていません</Text>
+          ) : (
+            <View style={vS.card}>
+              {(entrySheet.qaItems ?? []).length === 0 ? (
+                <Text style={[vS.emptyText, { paddingHorizontal: 16, paddingVertical: 12 }]}>設問がありません</Text>
+              ) : (
+                (entrySheet.qaItems ?? []).map((qa, i) => {
+                  const over = qa.charLimit > 0 && qa.answer.length > qa.charLimit;
+                  return (
+                    <View key={qa.id} style={[esVS.qaRow, i === (entrySheet.qaItems.length - 1) && vS.rowLast]}>
+                      <View style={esVS.qaBadge}>
+                        <Text style={esVS.qaBadgeText}>Q{i + 1}</Text>
+                      </View>
+                      <View style={esVS.qaBody}>
+                        <Text style={esVS.qaQuestion} numberOfLines={2}>{qa.question || '（設問未入力）'}</Text>
+                        <Text style={[esVS.qaCharInfo, over && esVS.qaCharInfoOver]}>
+                          {qa.answer.length}{qa.charLimit > 0 ? ` / ${qa.charLimit}字` : '字'}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })
+              )}
+            </View>
+          )}
+        </View>
 
         {/* 未完了タスク */}
         <View style={vS.section}>
@@ -1190,6 +1324,46 @@ const vS = StyleSheet.create({
   taskTitle: { fontSize: 14, color: C.text, fontWeight: '500' },
   taskTitleDone: { color: C.muted, textDecorationLine: 'line-through' },
   taskMeta: { fontSize: 12, color: C.sub, marginTop: 2 },
+});
+
+const esVS = StyleSheet.create({
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  statusBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 },
+  statusBadgeText: { color: '#FFF', fontSize: 11, fontWeight: 'bold' },
+  editEsBtn: {
+    marginLeft: 'auto',
+    backgroundColor: C.primary,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  editEsBtnText: { color: '#FFF', fontSize: 13, fontWeight: 'bold' },
+  qaRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+    gap: 10,
+  },
+  qaBadge: {
+    backgroundColor: C.primary,
+    borderRadius: 10,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    marginTop: 1,
+  },
+  qaBadgeText: { color: '#FFF', fontSize: 11, fontWeight: 'bold' },
+  qaBody: { flex: 1 },
+  qaQuestion: { fontSize: 14, color: C.text, marginBottom: 4, lineHeight: 20 },
+  qaCharInfo: { fontSize: 12, color: C.light },
+  qaCharInfoOver: { color: C.danger, fontWeight: 'bold' },
 });
 
 // ─── CompanyListScreen ────────────────────────────────────────────────────────
@@ -1796,13 +1970,397 @@ const dS = StyleSheet.create({
   bottomPad: { height: 32 },
 });
 
+// ─── QAItem ───────────────────────────────────────────────────────────────────
+
+interface QAItemProps {
+  qa: ESQAItem;
+  index: number;
+  onUpdate: (qa: ESQAItem) => void;
+  onDelete: () => void;
+}
+
+function QAItem({ qa, index, onUpdate, onDelete }: QAItemProps) {
+  const [expanded, setExpanded] = useState(index === 0);
+  const [limitText, setLimitText] = useState(qa.charLimit > 0 ? String(qa.charLimit) : '');
+
+  const charCount = qa.answer.length;
+  const parsedLimit = parseInt(limitText, 10);
+  const effectiveLimit = limitText.trim() === '' || isNaN(parsedLimit) ? 0 : parsedLimit;
+  const overLimit = effectiveLimit > 0 && charCount > effectiveLimit;
+
+  const handleLimitChange = (v: string) => {
+    setLimitText(v);
+    const parsed = parseInt(v, 10);
+    onUpdate({ ...qa, charLimit: v.trim() === '' || isNaN(parsed) ? 0 : parsed });
+  };
+
+  return (
+    <View style={qaS.card}>
+      <TouchableOpacity style={qaS.header} onPress={() => setExpanded(e => !e)} activeOpacity={0.7}>
+        <View style={qaS.indexBadge}>
+          <Text style={qaS.indexBadgeText}>Q{index + 1}</Text>
+        </View>
+        <Text style={qaS.questionPreview} numberOfLines={1}>
+          {qa.question || '（設問未入力）'}
+        </Text>
+        <Text style={[qaS.charBadge, overLimit && qaS.charBadgeOver]}>
+          {charCount}{effectiveLimit > 0 ? `/${effectiveLimit}字` : '字'}
+        </Text>
+        <Text style={qaS.chevron}>{expanded ? '▲' : '▼'}</Text>
+      </TouchableOpacity>
+
+      {expanded && (
+        <View style={qaS.body}>
+          <Text style={qaS.label}>設問</Text>
+          <TextInput
+            style={qaS.input}
+            value={qa.question}
+            onChangeText={v => onUpdate({ ...qa, question: v })}
+            placeholder="設問をここに入力してください"
+            placeholderTextColor={C.muted}
+          />
+
+          <Text style={qaS.label}>文字数制限（任意）</Text>
+          <TextInput
+            style={qaS.input}
+            value={limitText}
+            onChangeText={handleLimitChange}
+            placeholder="例：400（なければ空欄）"
+            placeholderTextColor={C.muted}
+            keyboardType="number-pad"
+          />
+
+          <View style={qaS.answerHeader}>
+            <Text style={qaS.label}>回答</Text>
+            <View style={qaS.answerHeaderRight}>
+              <Text style={[qaS.charCounter, overLimit && qaS.charCounterOver]}>
+                {charCount}{effectiveLimit > 0 ? ` / ${effectiveLimit}字` : '字'}
+              </Text>
+              <TouchableOpacity
+                style={qaS.copyBtn}
+                onPress={() => {
+                  Clipboard.setString(qa.answer);
+                  Alert.alert('コピーしました', '回答をクリップボードにコピーしました。');
+                }}
+                accessibilityLabel="回答をコピー"
+              >
+                <Text style={qaS.copyBtnText}>コピー</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+          <TextInput
+            style={[qaS.input, qaS.inputAnswer]}
+            value={qa.answer}
+            onChangeText={v => onUpdate({ ...qa, answer: v })}
+            placeholder="回答を入力してください"
+            placeholderTextColor={C.muted}
+            multiline
+            textAlignVertical="top"
+          />
+          {overLimit && (
+            <Text style={qaS.overLimitMsg}>
+              文字数制限を {charCount - effectiveLimit} 字超過しています
+            </Text>
+          )}
+
+          <TouchableOpacity style={qaS.deleteBtn} onPress={onDelete}>
+            <Text style={qaS.deleteBtnText}>この設問を削除</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+}
+
+const qaS = StyleSheet.create({
+  card: {
+    backgroundColor: '#F8F8F8',
+    borderRadius: 10,
+    marginBottom: 8,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+  },
+  indexBadge: {
+    backgroundColor: C.primary,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    marginRight: 10,
+  },
+  indexBadgeText: { color: C.card, fontSize: 12, fontWeight: 'bold' },
+  questionPreview: { flex: 1, fontSize: 14, color: C.text },
+  charBadge: { fontSize: 12, color: C.light, marginRight: 8 },
+  charBadgeOver: { color: C.danger, fontWeight: 'bold' },
+  chevron: { fontSize: 11, color: C.muted },
+  body: {
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+  },
+  label: { fontSize: 12, color: C.sub, marginTop: 10, marginBottom: 4 },
+  answerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  answerHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  charCounter: { fontSize: 12, color: C.light, fontWeight: '600' },
+  charCounterOver: { color: C.danger },
+  copyBtn: {
+    backgroundColor: C.primary,
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+  },
+  copyBtnText: { color: C.card, fontSize: 12, fontWeight: 'bold' },
+  input: {
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: C.text,
+    backgroundColor: C.card,
+  },
+  inputMulti: { minHeight: 72, textAlignVertical: 'top' },
+  inputAnswer: { minHeight: 160, textAlignVertical: 'top', lineHeight: 22 },
+  overLimitMsg: { marginTop: 4, fontSize: 12, color: C.danger, fontWeight: 'bold' },
+  deleteBtn: { marginTop: 12, alignItems: 'center', paddingVertical: 8 },
+  deleteBtnText: { color: C.danger, fontSize: 13 },
+});
+
+// ─── ESEditScreen ─────────────────────────────────────────────────────────────
+
+interface ESEditScreenProps {
+  es: ESItem;
+  isNew: boolean;
+  companyName: string;
+  onSave: (es: ESItem) => void;
+  onDelete: () => void;
+  onBack: () => void;
+}
+
+function ESEditScreen({ es, isNew, companyName, onSave, onDelete, onBack }: ESEditScreenProps) {
+  const [form, setForm] = useState<ESItem>(es);
+  const [showStatusPicker, setShowStatusPicker] = useState(false);
+  const originalRef = useRef(JSON.stringify(es));
+
+  const isDirty = () => JSON.stringify(form) !== originalRef.current;
+
+  const handleBack = () => {
+    if (isDirty()) {
+      Alert.alert('変更を破棄しますか？', '保存されていない変更は失われます。', [
+        { text: '続けて編集', style: 'cancel' },
+        { text: '破棄して戻る', style: 'destructive', onPress: onBack },
+      ]);
+    } else {
+      onBack();
+    }
+  };
+
+  const handleSave = () => {
+    const updated: ESItem = { ...form, updatedAt: nowISO() };
+    onSave(updated);
+    originalRef.current = JSON.stringify(updated);
+    onBack();
+  };
+
+  const handleDelete = () => {
+    Alert.alert('ESを削除', '削除すると元に戻せません。', [
+      { text: 'キャンセル', style: 'cancel' },
+      { text: '削除', style: 'destructive', onPress: () => { onDelete(); onBack(); } },
+    ]);
+  };
+
+  const addQA = () =>
+    setForm(f => ({ ...f, qaItems: [...(f.qaItems ?? []), makeEmptyQA()] }));
+
+  const updateQA = (id: string, qa: ESQAItem) =>
+    setForm(f => ({ ...f, qaItems: (f.qaItems ?? []).map(q => q.id === id ? qa : q) }));
+
+  const deleteQA = (id: string) => {
+    Alert.alert('設問を削除', 'この設問と回答を削除しますか？', [
+      { text: 'キャンセル', style: 'cancel' },
+      { text: '削除', style: 'destructive', onPress: () =>
+        setForm(f => ({ ...f, qaItems: (f.qaItems ?? []).filter(q => q.id !== id) }))
+      },
+    ]);
+  };
+
+  const qaItems = form.qaItems ?? [];
+
+  return (
+    <View style={esS.root}>
+      <View style={esS.navBar}>
+        <TouchableOpacity onPress={handleBack} style={esS.navBack}>
+          <Text style={esS.navBackText}>＜ 戻る</Text>
+        </TouchableOpacity>
+        <Text style={esS.navTitle} numberOfLines={1}>
+          {isNew ? '新規ES' : companyName}
+        </Text>
+        <TouchableOpacity onPress={handleSave} style={esS.navSave}>
+          <Text style={esS.navSaveText}>保存</Text>
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView style={esS.scroll} contentContainerStyle={esS.scrollContent} keyboardShouldPersistTaps="handled">
+        <Text style={esS.sectionTitle}>基本設定</Text>
+        <View style={esS.section}>
+          <Text style={esS.fieldLabel}>ステータス</Text>
+          <TouchableOpacity style={esS.selectBtn} onPress={() => setShowStatusPicker(true)}>
+            <View style={[esS.statusDot, { backgroundColor: ES_STATUS_COLOR[form.status] }]} />
+            <Text style={esS.selectValue}>{form.status}</Text>
+            <Text style={esS.selectArrow}>▼</Text>
+          </TouchableOpacity>
+        </View>
+
+        <Text style={esS.sectionTitle}>設問・回答</Text>
+        {qaItems.length === 0 && (
+          <Text style={esS.emptyQA}>設問がありません。下のボタンから追加してください。</Text>
+        )}
+        {qaItems.map((qa, i) => (
+          <QAItem
+            key={qa.id}
+            qa={qa}
+            index={i}
+            onUpdate={updated => updateQA(qa.id, updated)}
+            onDelete={() => deleteQA(qa.id)}
+          />
+        ))}
+        <TouchableOpacity style={esS.addQABtn} onPress={addQA}>
+          <Text style={esS.addQABtnText}>＋ 設問・回答を追加</Text>
+        </TouchableOpacity>
+
+        {!isNew && (
+          <View style={esS.metaRow}>
+            <Text style={esS.metaText}>作成日: {formatDateShort(form.createdAt)}</Text>
+            <Text style={esS.metaText}>更新日: {formatDateShort(form.updatedAt)}</Text>
+          </View>
+        )}
+
+        {!isNew && (
+          <TouchableOpacity style={esS.deleteBtn} onPress={handleDelete}>
+            <Text style={esS.deleteBtnText}>このESを削除する</Text>
+          </TouchableOpacity>
+        )}
+
+        <View style={esS.bottomPad} />
+      </ScrollView>
+
+      <PickerModal
+        visible={showStatusPicker}
+        title="ステータスを選択"
+        options={ES_STATUS_OPTIONS}
+        value={form.status}
+        onSelect={v => setForm(f => ({ ...f, status: v as ESStatus }))}
+        onClose={() => setShowStatusPicker(false)}
+      />
+    </View>
+  );
+}
+
+const esS = StyleSheet.create({
+  root: { flex: 1, backgroundColor: C.bg },
+  navBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: C.card,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+  },
+  navBack: { paddingRight: 10, paddingVertical: 4 },
+  navBackText: { color: C.primary, fontSize: 15 },
+  navTitle: { flex: 1, fontSize: 16, fontWeight: 'bold', color: C.text },
+  navSave: {
+    backgroundColor: C.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  navSaveText: { color: C.card, fontSize: 14, fontWeight: 'bold' },
+  scroll: { flex: 1 },
+  scrollContent: { padding: 16 },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: C.primary,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  section: {
+    backgroundColor: C.card,
+    borderRadius: 12,
+    padding: 14,
+  },
+  fieldLabel: { fontSize: 12, color: C.sub, marginTop: 12, marginBottom: 4 },
+  input: {
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: C.text,
+    backgroundColor: '#FAFAFA',
+  },
+  selectBtn: {
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#FAFAFA',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusDot: { width: 10, height: 10, borderRadius: 5, marginRight: 8 },
+  selectValue: { flex: 1, fontSize: 14, color: C.text },
+  selectArrow: { fontSize: 11, color: C.muted },
+  emptyQA: { fontSize: 13, color: C.muted, textAlign: 'center', marginBottom: 8 },
+  addQABtn: {
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: C.primary,
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  addQABtnText: { color: C.primary, fontSize: 14 },
+  metaRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 16, paddingHorizontal: 4 },
+  metaText: { fontSize: 11, color: C.muted },
+  deleteBtn: {
+    marginTop: 24,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: C.danger,
+  },
+  deleteBtnText: { color: C.danger, fontSize: 15, fontWeight: 'bold' },
+  bottomPad: { height: 32 },
+});
+
 // ─── JobManagementScreen (root) ───────────────────────────────────────────────
 
 type ViewState =
   | { mode: 'list' }
   | { mode: 'view'; companyId: string }
   | { mode: 'detail'; companyId: string }
-  | { mode: 'new'; draft: Company };
+  | { mode: 'new'; draft: Company }
+  | { mode: 'es'; companyId: string; draft: ESItem };
 
 function JobManagementScreen() {
   const { uid, isDemo } = useAuth();
@@ -1868,7 +2426,14 @@ function JobManagementScreen() {
         getDoc(doc(db, 'users', uid, 'job_settings', 'global_fields')),
       ]).then(([snap, fSnap]) => {
         const loaded = snap.docs.map(d => {
-          const data = d.data() as Partial<Company>;
+          const data = d.data() as Partial<Company> & { entrySheets?: unknown[] };
+          // 旧フォーマット移行: entrySheets配列の先頭をentrySheetに
+          let entrySheet: ESItem | null = null;
+          if (isPlainObject(data.entrySheet)) {
+            entrySheet = normalizeES(data.entrySheet);
+          } else if (Array.isArray(data.entrySheets) && data.entrySheets.length > 0) {
+            entrySheet = normalizeES(data.entrySheets[0]);
+          }
           return {
             id: data.id ?? d.id,
             name: data.name ?? '',
@@ -1880,6 +2445,7 @@ function JobManagementScreen() {
             tasks: Array.isArray(data.tasks) ? data.tasks : [],
             globalFieldValues: isPlainObject(data.globalFieldValues) ? toStringRecord(data.globalFieldValues) : {},
             memo: data.memo ?? '',
+            entrySheet,
             progressXp: typeof data.progressXp === 'number' ? data.progressXp : undefined,
           } as Company;
         });
@@ -1946,6 +2512,25 @@ function JobManagementScreen() {
     }
   }, [companies]);
 
+  if (view.mode === 'es') {
+    const company = companies.find(c => c.id === view.companyId);
+    if (!company) return <View style={s.loadingContainer}><ActivityIndicator color={C.primary} /></View>;
+    return (
+      <ESEditScreen
+        es={view.draft}
+        isNew={!company.entrySheet}
+        companyName={company.name}
+        onSave={(updated) => {
+          saveCompany({ ...company, entrySheet: updated });
+        }}
+        onDelete={() => {
+          saveCompany({ ...company, entrySheet: null });
+        }}
+        onBack={() => setView({ mode: 'view', companyId: view.companyId })}
+      />
+    );
+  }
+
   if (view.mode === 'view') {
     const company = companies.find(c => c.id === view.companyId);
     if (!company) return <View style={s.loadingContainer}><ActivityIndicator color={C.primary} /></View>;
@@ -1961,6 +2546,10 @@ function JobManagementScreen() {
             tasks: company.tasks.map(t => t.id === taskId ? { ...t, completed } : t),
           };
           saveCompany(updated);
+        }}
+        onNavigateToES={() => {
+          const draft = company.entrySheet ?? makeEmptyES();
+          setView({ mode: 'es', companyId: view.companyId, draft });
         }}
       />
     );
