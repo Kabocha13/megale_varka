@@ -1,49 +1,40 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
-import OmikujiModal from './omikuji'; // おみくじファイルをインポート
+import React, { useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import { useAuth } from '../context/AuthContext';
+import ShredderInput from './ShredderInput';
 
+// 健康画面で使われている共通カラーパレット（C）を抽出
 const C = {
-  primary: '#304E78',
-  bg: '#F2EBE4',
-  sub: '#555555',
+  primary: '#304E78', // ← タイトルの正解の色！
+  bg: '#F2EBE4',      // ← 背景色
+  text: '#333333',
+  sub: '#555555',     // ← サブテキストの正解の色
   successText: '#2E7D32',
   successBg: '#E8F5E9',
   successBorder: '#C8E6C9',
 };
 
-// --- 簡易データ保存用変数（アプリ起動中のみ記憶） ---
-// 画面を移動しても「完了した」という事実を覚えておくための変数
-let globalMentalRecovered = false;
+export default function JobSupportScreen() {
+  const { email } = useAuth();
+  const [alreadySaved, setAlreadySaved] = useState(false);
 
-export default function OmikujiScreen() {
-  // 初期値を false ではなく、グローバル変数の値にする
-  const [modalVisible, setModalVisible] = useState(false);
-  const [mentalRecovered, setMentalRecovered] = useState(globalMentalRecovered);
-
-  // 画面が開かれるたびに、グローバル変数の状態をチェックして表示を更新
-  useEffect(() => {
-    setMentalRecovered(globalMentalRecovered);
-  }, []);
-
-  const handleMentalRecovered = (amount: number) => {
-    console.log(`メンタルが ${amount} 回復！`);
-    
-    // 画面の表示を更新するのと同時に、裏側の記憶も「完了」にする
-    globalMentalRecovered = true;
-    setMentalRecovered(true);
+  const handleExpEarned = (amount: number) => {
+    console.log(`${amount} EXP 獲得！`);
+    setAlreadySaved(true);
   };
 
   return (
     <View style={s.container}>
-      {/* Header：デザインは他画面と統一 */}
+      {/* Header部分（健康画面の構成をベースに配置） */}
       <View style={s.header}>
         <View style={s.headerLeft}>
           <Text style={s.title}>就活サポート</Text>
+          <Text style={s.subText}>発散とおまけ</Text>
           
-          {mentalRecovered && (
+          {alreadySaved && (
             <View style={s.savedBadge}>
               <Text style={s.savedBadgeIcon}>✓</Text>
-              <Text style={s.savedBadgeText}>おみくじ完了</Text>
+              <Text style={s.savedBadgeText}>記録済み</Text>
             </View>
           )}
         </View>
@@ -73,6 +64,14 @@ export default function OmikujiScreen() {
         onClose={() => setModalVisible(false)}
         onMentalRecovered={handleMentalRecovered}
       />
+      {/* コンテンツ部分（シュレッダー機能のみ） */}
+      <View style={s.content}>
+        <ShredderInput 
+          onExpEarned={handleExpEarned}
+          placeholder="お祈りメールの悔しさや不安をここに書いて燃やしましょう"
+          buttonLabel="シュレッダーでさよならする"
+        />
+      </View>
     </View>
   );
 }
@@ -84,9 +83,21 @@ const s = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 16,
   },
-  headerLeft: { flexDirection: 'column', alignItems: 'flex-start' },
-  title: { fontSize: 24, fontWeight: 'bold', color: C.primary, marginBottom: 4 },
-  subText: { fontSize: 14, color: C.sub, marginBottom: 8 },
+  headerLeft: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+  },
+  title: { 
+    fontSize: 24, 
+    fontWeight: 'bold', 
+    color: C.primary, // 健康画面と完全に一致
+    marginBottom: 4 
+  },
+  subText: { 
+    fontSize: 14, 
+    color: C.sub,     // 健康画面のグレーと完全に一致
+    marginBottom: 8 
+  },
   savedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -96,25 +107,21 @@ const s = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: C.successBorder,
-    marginTop: 4,
+    alignSelf: 'flex-start',
   },
-  savedBadgeIcon: { fontSize: 12, color: C.successText, marginRight: 4, fontWeight: 'bold' },
-  savedBadgeText: { fontSize: 11, color: C.successText, fontWeight: 'bold' },
-  content: { flex: 1, paddingHorizontal: 20, justifyContent: 'center' },
-  card: {
-    backgroundColor: '#FFF',
-    borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#D9D0C8',
+  savedBadgeIcon: {
+    fontSize: 12,
+    color: C.successText,
+    marginRight: 4,
+    fontWeight: 'bold',
   },
-  cardText: { fontSize: 16, color: '#333', textAlign: 'center', marginBottom: 20, lineHeight: 24 },
-  drawButton: {
-    backgroundColor: C.primary,
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    borderRadius: 25,
+  savedBadgeText: {
+    fontSize: 11,
+    color: C.successText,
+    fontWeight: 'bold',
   },
-  drawButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
+  content: { 
+    flex: 1, 
+    paddingHorizontal: 20 
+  },
 });
