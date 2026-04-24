@@ -9,6 +9,8 @@ import { Platform } from 'react-native';
 
 export interface HealthKitData {
   sleepHours: number | null;
+  sleepStart: Date | null;     // earliest "asleep" sample start within the window
+  sleepEnd: Date | null;       // latest "asleep" sample end within the window
   steps: number | null;
   activeCalories: number | null;
 }
@@ -45,37 +47,53 @@ export async function requestHealthKitPermissions(): Promise<HKRequestResult> {
   }
 }
 
-const EMPTY: HealthKitData = { sleepHours: null, steps: null, activeCalories: null };
+const EMPTY: HealthKitData = {
+  sleepHours: null,
+  sleepStart: null,
+  sleepEnd: null,
+  steps: null,
+  activeCalories: null,
+};
 
 // Silently fetches yesterday's data; won't show permission dialog. Call on mount.
 export async function fetchYesterdayHealthKitData(): Promise<HealthKitData> {
+  const y = new Date();
+  y.setDate(y.getDate() - 1);
+  const dateStr = `${y.getFullYear()}-${String(y.getMonth() + 1).padStart(2, '0')}-${String(y.getDate()).padStart(2, '0')}`;
+  return fetchHealthKitDataForDate(dateStr);
+}
+
+/**
+ * Fetches HealthKit data for an arbitrary calendar day (YYYY-MM-DD).
+ * Silent — no permission dialog. Used by the retroactive-entry flow so
+ * past-day forms still show the day's steps / calories / sleep.
+ */
+export async function fetchHealthKitDataForDate(dateStr: string): Promise<HealthKitData> {
   if (!isHealthKitAvailable()) { return EMPTY; }
   const asked = await hasRequestedHealthKit();
   if (!asked) { return EMPTY; }
 
-  const now = new Date();
+  const [y, m, d] = dateStr.split('-').map(Number);
+  // Steps / calories window: the full target day 00:00 → 23:59:59
+  const dayStart = new Date(y, m - 1, d, 0, 0, 0, 0);
+  const dayEnd = new Date(y, m - 1, d, 23, 59, 59, 999);
 
-  // Yesterday: 00:00 → 23:59:59
-  const startOfYesterday = new Date(now);
-  startOfYesterday.setDate(startOfYesterday.getDate() - 1);
-  startOfYesterday.setHours(0, 0, 0, 0);
-
-  const endOfYesterday = new Date(startOfYesterday);
-  endOfYesterday.setHours(23, 59, 59, 999);
-
-  // Sleep window: 2 days ago 16:00 → yesterday 12:00 (captures overnight sleep)
-  const sleepEnd = new Date(startOfYesterday);
-  sleepEnd.setHours(12, 0, 0, 0);
+  // Sleep window: the previous day 16:00 → target day 12:00
+  // (captures the overnight sleep that ended on the morning of the target day)
+  const sleepEnd = new Date(y, m - 1, d, 12, 0, 0, 0);
   const sleepStart = new Date(sleepEnd.getTime() - 20 * 60 * 60 * 1000);
 
   const [sleepResult, stepsResult, caloriesResult] = await Promise.allSettled([
-    getSleepHours(sleepStart, sleepEnd),
-    getStepCount(startOfYesterday, endOfYesterday),
-    getActiveCalories(startOfYesterday, endOfYesterday),
+    getSleepInfo(sleepStart, sleepEnd),
+    getStepCount(dayStart, dayEnd),
+    getActiveCalories(dayStart, dayEnd),
   ]);
 
+  const sleepInfo = sleepResult.status === 'fulfilled' ? sleepResult.value : null;
   return {
-    sleepHours: sleepResult.status === 'fulfilled' ? sleepResult.value : null,
+    sleepHours: sleepInfo?.hours ?? null,
+    sleepStart: sleepInfo?.startDate ?? null,
+    sleepEnd: sleepInfo?.endDate ?? null,
     steps: stepsResult.status === 'fulfilled' ? stepsResult.value : null,
     activeCalories: caloriesResult.status === 'fulfilled' ? caloriesResult.value : null,
   };
@@ -84,19 +102,33 @@ export async function fetchYesterdayHealthKitData(): Promise<HealthKitData> {
 // HealthKit sleep values: 0=inBed, 1=asleep(legacy), 2=awake, 3=asleepCore, 4=asleepDeep, 5=asleepREM
 const SLEEP_VALUES = new Set([1, 3, 4, 5]);
 
-async function getSleepHours(startDate: Date, endDate: Date): Promise<number | null> {
+interface SleepInfo {
+  hours: number;
+  startDate: Date;   // earliest "asleep" sample start
+  endDate: Date;     // latest "asleep" sample end
+}
+
+async function getSleepInfo(startDate: Date, endDate: Date): Promise<SleepInfo | null> {
   const samples = await queryCategorySamples('HKCategoryTypeIdentifierSleepAnalysis', {
     filter: { date: { startDate, endDate } },
     limit: 1000,
   });
   if (!samples.length) { return null; }
   let ms = 0;
+  let earliest: Date | null = null;
+  let latest: Date | null = null;
   for (const s of samples) {
-    if (SLEEP_VALUES.has(s.value as number)) {
-      ms += s.endDate.getTime() - s.startDate.getTime();
+    if (!SLEEP_VALUES.has(s.value as number)) { continue; }
+    ms += s.endDate.getTime() - s.startDate.getTime();
+    if (!earliest || s.startDate.getTime() < earliest.getTime()) {
+      earliest = s.startDate;
+    }
+    if (!latest || s.endDate.getTime() > latest.getTime()) {
+      latest = s.endDate;
     }
   }
-  return ms > 0 ? ms / 3_600_000 : null;
+  if (ms <= 0 || !earliest || !latest) { return null; }
+  return { hours: ms / 3_600_000, startDate: earliest, endDate: latest };
 }
 
 async function getStepCount(startDate: Date, endDate: Date): Promise<number | null> {
