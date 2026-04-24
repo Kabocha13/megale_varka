@@ -27,7 +27,7 @@ const APPETITE_META: Record<AppetiteValue, { label: string; iconName: MaterialIc
   water:    { label: '水',         iconName: 'opacity', color: '#7FA8D0' },
   noodles:  { label: '麺類',       iconName: 'ramen-dining', color: '#E0B877' },
   set_meal: { label: '定食',       iconName: 'set-meal', color: '#6EA56E' },
-  steak:    { label: 'ステーキ',   iconName: 'dinner-dining', color: '#8E5A3C' },
+  steak:    { label: 'ステーキ',   iconName: 'outdoor-grill', color: '#8E5A3C' },
 };
 
 function shortDayLabel(dateStr: string): string {
@@ -196,7 +196,13 @@ export default function HealthStatsScreen({ uid, onEdit }: Props) {
     <ScrollView style={s.container} contentContainerStyle={s.content}>
       {/* Header */}
       <View style={s.header}>
-        <Text style={s.title}>健康統計</Text>
+        <View style={s.titleRow}>
+          <Text style={s.title}>健康統計</Text>
+          <View style={s.streakBadge}>
+            <MaterialIcons name="local-fire-department" size={21} color="#E36F2C" />
+            <Text style={s.streakText}>継続記録 {stats.streak}日</Text>
+          </View>
+        </View>
         {onEdit && (
           <TouchableOpacity onPress={() => onEdit()} style={s.editBtn}>
             <Text style={s.editBtnText}>記録を編集</Text>
@@ -363,7 +369,15 @@ const s = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 10,
   },
+  titleRow: { flexDirection: 'row', alignItems: 'center', flexShrink: 1 },
   title: { fontSize: 20, fontWeight: 'bold', color: C.primary },
+  streakBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 10,
+    flexShrink: 1,
+  },
+  streakText: { fontSize: 18, fontWeight: 'bold', color: '#B8683B' },
   editBtn: {
     paddingHorizontal: 12,
     paddingVertical: 6,

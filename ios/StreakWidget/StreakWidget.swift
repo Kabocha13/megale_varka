@@ -13,6 +13,7 @@ struct StreakEntry: TimelineEntry {
 
 struct StreakProvider: TimelineProvider {
     private static let suiteName = "group.com.megale_varka"
+    private static let widgetStateDateKey = "widgetStateDate"
 
     func placeholder(in context: Context) -> StreakEntry {
         StreakEntry(date: Date(), streak: 7, recordedToday: true)
@@ -37,8 +38,19 @@ struct StreakProvider: TimelineProvider {
     private func readEntry() -> StreakEntry {
         let defaults = UserDefaults(suiteName: Self.suiteName)
         let streak = defaults?.integer(forKey: "streak") ?? 0
-        let recordedToday = defaults?.bool(forKey: "recordedToday") ?? false
+        let storedRecordedToday = defaults?.bool(forKey: "recordedToday") ?? false
+        let stateDate = defaults?.string(forKey: Self.widgetStateDateKey)
+        let recordedToday = storedRecordedToday && stateDate == todayString()
         return StreakEntry(date: Date(), streak: streak, recordedToday: recordedToday)
+    }
+
+    private func todayString() -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: Date())
     }
 }
 
@@ -88,4 +100,3 @@ struct StreakWidgetMain: Widget {
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }
-
