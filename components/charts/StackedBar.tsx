@@ -1,11 +1,14 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import MaterialIcons from '@react-native-vector-icons/material-icons';
+
+type MaterialIconName = React.ComponentProps<typeof MaterialIcons>['name'];
 
 export interface StackSegment {
   label: string;
   value: number;
   color: string;
-  emoji?: string;
+  iconName?: MaterialIconName;
 }
 
 interface Props {
@@ -29,15 +32,15 @@ export default function StackedBar({ data, height = 22 }: Props) {
           return (
             <View
               key={seg.label}
-              style={{
-                flex: pct,
-                backgroundColor: seg.color,
-                justifyContent: 'center',
-                alignItems: 'center',
-              }}
+              style={[
+                styles.segment,
+                { flex: pct, backgroundColor: seg.color },
+              ]}
             >
               {pct >= 10 && (
-                <Text style={styles.segLabel}>{seg.emoji ?? ''}</Text>
+                seg.iconName && (
+                  <MaterialIcons name={seg.iconName} size={14} color="#FFFFFF" />
+                )
               )}
             </View>
           );
@@ -47,8 +50,11 @@ export default function StackedBar({ data, height = 22 }: Props) {
         {data.map(seg => (
           <View key={`l-${seg.label}`} style={styles.legendItem}>
             <View style={[styles.swatch, { backgroundColor: seg.color }]} />
+            {seg.iconName && (
+              <MaterialIcons name={seg.iconName} size={12} color="#555555" />
+            )}
             <Text style={styles.legendText}>
-              {seg.emoji ? `${seg.emoji} ` : ''}{seg.label}
+              {seg.label}
               {total > 0 ? ` ${Math.round((seg.value / total) * 100)}%` : ''}
             </Text>
           </View>
@@ -64,9 +70,9 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     overflow: 'hidden',
   },
-  segLabel: {
-    fontSize: 12,
-    color: '#FFFFFF',
+  segment: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   legend: {
     flexDirection: 'row',

@@ -21,6 +21,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import MaterialIcons from '@react-native-vector-icons/material-icons';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../firebase/config';
 import {
@@ -33,15 +34,16 @@ import HealthStatsScreen from './HealthStatsScreen';
 type Mood = 1 | 2 | 3 | 4 | 5;
 type AppetiteValue = 'nothing' | 'water' | 'noodles' | 'set_meal' | 'steak';
 type DailyAnswer = 'none' | 'little' | 'some' | 'always';
+type MaterialIconName = React.ComponentProps<typeof MaterialIcons>['name'];
 
 // --- Constants ---
 // Left=悪い, right=良い
-const MOODS: { value: Mood; emoji: string; label: string }[] = [
-  { value: 1, emoji: '😞', label: 'とても悪い' },
-  { value: 2, emoji: '😕', label: '悪い' },
-  { value: 3, emoji: '😐', label: '普通' },
-  { value: 4, emoji: '🙂', label: '良い' },
-  { value: 5, emoji: '😊', label: 'とても良い' },
+const MOODS: { value: Mood; iconName: MaterialIconName; label: string }[] = [
+  { value: 1, iconName: 'sentiment-very-dissatisfied', label: 'とても悪い' },
+  { value: 2, iconName: 'sentiment-dissatisfied', label: '悪い' },
+  { value: 3, iconName: 'sentiment-neutral', label: '普通' },
+  { value: 4, iconName: 'sentiment-satisfied', label: '良い' },
+  { value: 5, iconName: 'sentiment-very-satisfied', label: 'とても良い' },
 ];
 
 const SYMPTOMS = [
@@ -52,12 +54,12 @@ const SYMPTOMS = [
   'その他',
 ];
 
-const APPETITE_OPTIONS: { value: AppetiteValue; emoji: string; label: string }[] = [
-  { value: 'nothing',  emoji: '🚫', label: '食べれない' },
-  { value: 'water',    emoji: '💧', label: '水' },
-  { value: 'noodles',  emoji: '🍜', label: '麺類' },
-  { value: 'set_meal', emoji: '🍱', label: '定食' },
-  { value: 'steak',    emoji: '🥩', label: 'ステーキ' },
+const APPETITE_OPTIONS: { value: AppetiteValue; iconName: MaterialIconName; label: string }[] = [
+  { value: 'nothing',  iconName: 'no-meals', label: '食べれない' },
+  { value: 'water',    iconName: 'opacity', label: '水' },
+  { value: 'noodles',  iconName: 'ramen-dining', label: '麺類' },
+  { value: 'set_meal', iconName: 'set-meal', label: '定食' },
+  { value: 'steak',    iconName: 'outdoor-grill', label: 'ステーキ' },
 ];
 
 // CES-D style daily check-in questions. One is shown per day, deterministically
@@ -180,6 +182,7 @@ export default function HealthCareScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [alreadySaved, setAlreadySaved] = useState(false);
+  const [existingIsRetroactive, setExistingIsRetroactive] = useState(false);
   const [selectedDate, setSelectedDate] = useState(today);
 
   const [mood, setMood] = useState<Mood | null>(null);
@@ -239,6 +242,7 @@ export default function HealthCareScreen() {
       setLoading(true);
       // Reset form to defaults so switching dates doesn't carry stale values.
       setAlreadySaved(false);
+      setExistingIsRetroactive(false);
       setMood(null);
       setSymptoms([]);
       setOtherNote('');
@@ -274,6 +278,7 @@ export default function HealthCareScreen() {
           if (!cancelled && snap.exists()) {
             const data = snap.data();
             setAlreadySaved(true);
+            setExistingIsRetroactive(data.isRetroactive === true);
             setStatsAvailable(true);
             if (data.mood) { setMood(data.mood as Mood); }
             if (data.symptoms) { setSymptoms(data.symptoms); }
@@ -297,7 +302,7 @@ export default function HealthCareScreen() {
             }
           }
         }
-      } catch (_) {
+      } catch {
         // silently ignore load errors
       } finally {
         if (!cancelled) {
@@ -325,6 +330,7 @@ export default function HealthCareScreen() {
     }
     setSaving(true);
     const sleepHours = calcSleepHours(bedTime, wakeTime);
+    const shouldExcludeFromStreak = isRetroactive && (!alreadySaved || existingIsRetroactive);
     try {
       await setDoc(doc(db, 'users', uid, 'healthRecords', selectedDate), {
         date: selectedDate,
@@ -340,10 +346,11 @@ export default function HealthCareScreen() {
         steps,
         activeCalories,
         dailyAnswer,
-        isRetroactive,
+        isRetroactive: shouldExcludeFromStreak,
         updatedAt: serverTimestamp(),
       });
       setAlreadySaved(true);
+      setExistingIsRetroactive(shouldExcludeFromStreak);
       setStatsAvailable(true);
       setStatsKey(k => k + 1); // force stats refresh next reveal
       if (isRetroactive) {
@@ -354,7 +361,7 @@ export default function HealthCareScreen() {
       } else {
         animateFormOut();
       }
-    } catch (_) {
+    } catch {
       Alert.alert('エラー', '保存に失敗しました。再度お試しください。');
     } finally {
       setSaving(false);
@@ -395,7 +402,12 @@ export default function HealthCareScreen() {
         <View style={s.headerLeft}>
           <Text style={s.title}>健康記録</Text>
           <Text style={s.dateText}>{formatDate(selectedDate)}</Text>
-          {alreadySaved && <Text style={s.savedBadge}>✓ 記録済み</Text>}
+          {alreadySaved && (
+            <View style={s.savedBadge}>
+              <MaterialIcons name="check" size={12} color="#2E7D32" />
+              <Text style={s.savedBadgeText}>記録済み</Text>
+            </View>
+          )}
         </View>
         {statsAvailable && (
           <TouchableOpacity
@@ -433,7 +445,9 @@ export default function HealthCareScreen() {
       {isRetroactive && (
         <View style={s.retroBanner}>
           <Text style={s.retroBannerText}>
-            遡って記録中です。連続記録には加算されません。
+            {alreadySaved && !existingIsRetroactive
+              ? '過去の記録を更新中です。連続記録は維持されます。'
+              : '遡って記録中です。連続記録には加算されません。'}
           </Text>
         </View>
       )}
@@ -451,7 +465,12 @@ export default function HealthCareScreen() {
               accessibilityRole="button"
               accessibilityState={{ selected: mood === m.value }}
             >
-              <Text style={s.moodEmoji}>{m.emoji}</Text>
+              <MaterialIcons
+                name={m.iconName}
+                size={26}
+                color={mood === m.value ? C.primary : C.muted}
+                style={s.optionIcon}
+              />
               <Text style={[s.moodLabel, mood === m.value && s.moodLabelSelected]}>
                 {m.label}
               </Text>
@@ -513,7 +532,7 @@ export default function HealthCareScreen() {
               ? DAILY_ANSWER_OPTIONS.find(o => o.value === dailyAnswer)?.label
               : '選択してください'}
           </Text>
-          <Text style={s.dropdownArrow}>▼</Text>
+          <MaterialIcons name="keyboard-arrow-down" size={20} color={C.sub} />
         </TouchableOpacity>
       </View>
 
@@ -530,7 +549,12 @@ export default function HealthCareScreen() {
               accessibilityLabel={opt.label}
               accessibilityState={{ selected: appetite === opt.value }}
             >
-              <Text style={s.appetiteEmoji}>{opt.emoji}</Text>
+              <MaterialIcons
+                name={opt.iconName}
+                size={25}
+                color={appetite === opt.value ? C.primary : C.muted}
+                style={s.optionIcon}
+              />
               <Text style={[s.appetiteLabel, appetite === opt.value && s.appetiteLabelSelected]}>
                 {opt.label}
               </Text>
@@ -566,7 +590,10 @@ export default function HealthCareScreen() {
       <Text style={s.sectionTitle}>睡眠時間</Text>
       <View style={s.card}>
         {sleepSource === 'healthkit' && (
-          <Text style={s.hkBadge}>🍎 ヘルスケア連携</Text>
+          <View style={s.hkBadge}>
+            <MaterialIcons name="apple" size={12} color={C.primary} />
+            <Text style={s.hkBadgeText}>ヘルスケア連携</Text>
+          </View>
         )}
         <View style={s.sleepRow}>
           <View style={s.sleepTimeBlock}>
@@ -578,7 +605,7 @@ export default function HealthCareScreen() {
               <Text style={s.sleepTimeText}>{formatTime(bedTime)}</Text>
             </TouchableOpacity>
           </View>
-          <Text style={s.sleepArrow}>→</Text>
+          <MaterialIcons name="arrow-forward" size={18} color={C.muted} style={s.sleepArrow} />
           <View style={s.sleepTimeBlock}>
             <Text style={s.sleepTimeLabel}>起床</Text>
             <TouchableOpacity
@@ -600,18 +627,21 @@ export default function HealthCareScreen() {
       <View style={s.card}>
         {steps !== null || activeCalories !== null ? (
           <>
-            <Text style={s.hkBadge}>
-              🍎 {isRetroactive ? `${formatDate(selectedDate)}のデータ` : '昨日のデータ'}
-            </Text>
+            <View style={s.hkBadge}>
+              <MaterialIcons name="apple" size={12} color={C.primary} />
+              <Text style={s.hkBadgeText}>
+                {isRetroactive ? `${formatDate(selectedDate)}のデータ` : '昨日のデータ'}
+              </Text>
+            </View>
             <View style={s.exerciseRow}>
               <View style={s.exerciseItem}>
-                <Text style={s.exerciseIcon}>👟</Text>
+                <MaterialIcons name="directions-walk" size={22} color={C.primary} style={s.exerciseIcon} />
                 <Text style={s.exerciseValue}>{steps?.toLocaleString() ?? '---'}</Text>
                 <Text style={s.exerciseUnit}>歩</Text>
               </View>
               <View style={s.exerciseDivider} />
               <View style={s.exerciseItem}>
-                <Text style={s.exerciseIcon}>🔥</Text>
+                <MaterialIcons name="local-fire-department" size={22} color="#B8683B" style={s.exerciseIcon} />
                 <Text style={s.exerciseValue}>{activeCalories?.toLocaleString() ?? '---'}</Text>
                 <Text style={s.exerciseUnit}>kcal</Text>
               </View>
@@ -619,7 +649,7 @@ export default function HealthCareScreen() {
           </>
         ) : hkAvailable ? (
           <View style={s.hkOffPrompt}>
-            <Text style={s.hkOffIcon}>🍎</Text>
+            <MaterialIcons name="apple" size={26} color={C.primary} style={s.hkOffIcon} />
             <Text style={s.hkOffTitle}>ヘルスケア連携がオフです</Text>
             <Text style={s.hkOffSub}>
               設定 › プライバシーとセキュリティ › ヘルスケア{'\n'}
@@ -736,7 +766,7 @@ export default function HealthCareScreen() {
                     <Text style={[s.answerOptionText, selected && s.answerOptionTextSelected]}>
                       {opt.label}
                     </Text>
-                    {selected && <Text style={s.answerCheck}>✓</Text>}
+                    {selected && <MaterialIcons name="check" size={18} color={C.primary} />}
                   </TouchableOpacity>
                 );
               })}
@@ -794,7 +824,13 @@ const s = StyleSheet.create({
   headerLeft: { flex: 1 },
   title: { fontSize: 20, fontWeight: 'bold', color: C.primary },
   dateText: { fontSize: 12, color: C.sub, marginTop: 2 },
-  savedBadge: { marginTop: 2, fontSize: 11, color: '#2E7D32', fontWeight: 'bold' },
+  savedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    marginTop: 2,
+  },
+  savedBadgeText: { fontSize: 11, color: '#2E7D32', fontWeight: 'bold' },
   backBtn: {
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -866,7 +902,7 @@ const s = StyleSheet.create({
     marginHorizontal: 2,
   },
   moodBtnSelected: { backgroundColor: C.selected },
-  moodEmoji: { fontSize: 24 },
+  optionIcon: { marginBottom: 2 },
   moodLabel: { fontSize: 9, color: C.muted, marginTop: 3, textAlign: 'center' },
   moodLabelSelected: { color: C.primary, fontWeight: 'bold' },
 
@@ -917,7 +953,6 @@ const s = StyleSheet.create({
   },
   dropdownText: { fontSize: 14, color: C.text },
   dropdownPlaceholder: { color: C.muted },
-  dropdownArrow: { fontSize: 10, color: C.sub, marginLeft: 8 },
 
   answerOverlay: {
     flex: 1,
@@ -952,7 +987,6 @@ const s = StyleSheet.create({
   answerOptionSelected: { backgroundColor: C.selected },
   answerOptionText: { fontSize: 15, color: C.text },
   answerOptionTextSelected: { color: C.primary, fontWeight: 'bold' },
-  answerCheck: { fontSize: 15, color: C.primary, fontWeight: 'bold' },
 
   // Appetite
   appetiteRow: { flexDirection: 'row', justifyContent: 'space-between' },
@@ -964,7 +998,6 @@ const s = StyleSheet.create({
     marginHorizontal: 2,
   },
   appetiteBtnSelected: { backgroundColor: C.selected },
-  appetiteEmoji: { fontSize: 24 },
   appetiteLabel: { fontSize: 9, color: C.muted, marginTop: 3, textAlign: 'center' },
   appetiteLabelSelected: { color: C.primary, fontWeight: 'bold' },
   checkmark: { fontSize: 14, color: C.primary, fontWeight: 'bold' },
@@ -984,7 +1017,13 @@ const s = StyleSheet.create({
   toggleBtnTextActive: { color: '#FFF', fontWeight: 'bold' },
 
   // Sleep
-  hkBadge: { fontSize: 10, color: C.primary, marginBottom: 4 },
+  hkBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginBottom: 4,
+  },
+  hkBadgeText: { fontSize: 10, color: C.primary },
   sleepRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1000,13 +1039,13 @@ const s = StyleSheet.create({
     borderRadius: 10,
   },
   sleepTimeText: { fontSize: 20, fontWeight: 'bold', color: C.primary },
-  sleepArrow: { fontSize: 16, color: C.muted, marginTop: 10 },
+  sleepArrow: { marginTop: 10 },
   sleepDurationBlock: { alignItems: 'center' },
   sleepDurationText: { fontSize: 16, fontWeight: 'bold', color: C.text },
 
   // Exercise
   hkOffPrompt: { alignItems: 'center', paddingVertical: 6, gap: 4 },
-  hkOffIcon: { fontSize: 24, marginBottom: 2 },
+  hkOffIcon: { marginBottom: 2 },
   hkOffTitle: { fontSize: 13, fontWeight: 'bold', color: C.primary },
   hkOffSub: { fontSize: 11, color: C.sub, textAlign: 'center', lineHeight: 18 },
   hkUnavailableText: { fontSize: 12, color: C.muted, textAlign: 'center', paddingVertical: 6 },
@@ -1018,7 +1057,7 @@ const s = StyleSheet.create({
   },
   exerciseDivider: { width: 1, height: 44, backgroundColor: C.border },
   exerciseItem: { alignItems: 'center', flex: 1 },
-  exerciseIcon: { fontSize: 20, marginBottom: 2 },
+  exerciseIcon: { marginBottom: 2 },
   exerciseValue: { fontSize: 20, fontWeight: 'bold', color: C.text },
   exerciseUnit: { fontSize: 12, color: C.muted },
 
