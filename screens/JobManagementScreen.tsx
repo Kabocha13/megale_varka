@@ -69,18 +69,6 @@ interface ESItem {
   qaItems: ESQAItem[];
 }
 
-interface ESTemplateQA {
-  question: string;
-  charLimit: number;
-}
-
-interface ESTemplate {
-  id: string;
-  name: string;
-  createdAt: string;
-  qaItems: ESTemplateQA[];
-}
-
 interface Company {
   id: string;
   name: string;
@@ -119,7 +107,6 @@ const SELECTION_STATUS_OPTIONS: string[] = [
 ];
 const STORAGE_KEY = '@job_companies_v1';
 const GLOBAL_FIELDS_KEY = '@job_global_fields_v1';
-const TEMPLATES_KEY = '@es_templates_v1';
 
 const C = {
   primary: '#304E78',
@@ -2147,198 +2134,20 @@ const qaS = StyleSheet.create({
   deleteBtnText: { color: C.danger, fontSize: 13 },
 });
 
-// ─── ESTemplateModal ─────────────────────────────────────────────────────────
-
-interface ESTemplateModalProps {
-  visible: boolean;
-  mode: 'save' | 'load';
-  templates: ESTemplate[];
-  onSave: (name: string) => void;
-  onLoad: (template: ESTemplate) => void;
-  onDelete: (id: string) => void;
-  onClose: () => void;
-}
-
-function ESTemplateModal({ visible, mode, templates, onSave, onLoad, onDelete, onClose }: ESTemplateModalProps) {
-  const [name, setName] = useState('');
-
-  useEffect(() => {
-    if (visible) setName('');
-  }, [visible]);
-
-  const handleSave = () => {
-    const trimmed = name.trim();
-    if (!trimmed) {
-      Alert.alert('エラー', 'テンプレート名を入力してください。');
-      return;
-    }
-    onSave(trimmed);
-    onClose();
-  };
-
-  const handleDelete = (id: string) => {
-    Alert.alert('テンプレートを削除', '削除すると元に戻せません。', [
-      { text: 'キャンセル', style: 'cancel' },
-      { text: '削除', style: 'destructive', onPress: () => onDelete(id) },
-    ]);
-  };
-
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={tmS.overlay}>
-        <View style={tmS.sheet}>
-          <View style={tmS.header}>
-            <Text style={tmS.title}>
-              {mode === 'save' ? 'テンプレートとして保存' : 'テンプレートを読み込む'}
-            </Text>
-            <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Text style={tmS.closeText}>✕</Text>
-            </TouchableOpacity>
-          </View>
-
-          {mode === 'save' ? (
-            <>
-              <Text style={tmS.desc}>設問と文字数制限のみ保存されます（回答は含まれません）</Text>
-              <TextInput
-                style={tmS.input}
-                value={name}
-                onChangeText={setName}
-                placeholder="テンプレート名（例：一般職ES）"
-                placeholderTextColor={C.muted}
-                autoFocus
-                returnKeyType="done"
-                onSubmitEditing={handleSave}
-              />
-              <TouchableOpacity style={tmS.primaryBtn} onPress={handleSave}>
-                <Text style={tmS.primaryBtnText}>保存する</Text>
-              </TouchableOpacity>
-            </>
-          ) : (
-            <>
-              {templates.length === 0 ? (
-                <View style={tmS.emptyWrap}>
-                  <Text style={tmS.emptyText}>保存済みテンプレートはありません</Text>
-                  <Text style={tmS.emptySub}>ES編集画面から設問をテンプレートとして保存できます</Text>
-                </View>
-              ) : (
-                <ScrollView style={tmS.list} bounces={false}>
-                  {templates.map(t => (
-                    <View key={t.id} style={tmS.templateRow}>
-                      <View style={tmS.templateInfo}>
-                        <Text style={tmS.templateName}>{t.name}</Text>
-                        <Text style={tmS.templateMeta}>{t.qaItems.length}問　{formatDateShort(t.createdAt)}</Text>
-                      </View>
-                      <TouchableOpacity
-                        style={tmS.loadBtn}
-                        onPress={() => { onLoad(t); onClose(); }}
-                      >
-                        <Text style={tmS.loadBtnText}>読み込む</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => handleDelete(t.id)}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        style={tmS.deleteIconBtn}
-                      >
-                        <Text style={tmS.deleteIconText}>🗑</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                </ScrollView>
-              )}
-            </>
-          )}
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
-const tmS = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    backgroundColor: C.card,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    paddingBottom: 36,
-    maxHeight: '75%',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  title: { fontSize: 16, fontWeight: 'bold', color: C.text },
-  closeText: { fontSize: 16, color: C.muted },
-  desc: { fontSize: 12, color: C.sub, marginBottom: 12 },
-  input: {
-    borderWidth: 1,
-    borderColor: C.border,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: C.text,
-    backgroundColor: '#FAFAFA',
-    marginBottom: 12,
-  },
-  primaryBtn: {
-    backgroundColor: C.primary,
-    borderRadius: 10,
-    paddingVertical: 13,
-    alignItems: 'center',
-  },
-  primaryBtnText: { color: C.card, fontSize: 15, fontWeight: 'bold' },
-  list: { maxHeight: 320 },
-  emptyWrap: { paddingVertical: 32, alignItems: 'center' },
-  emptyText: { fontSize: 14, color: C.sub, marginBottom: 6 },
-  emptySub: { fontSize: 12, color: C.muted, textAlign: 'center' },
-  templateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: C.border,
-    gap: 8,
-  },
-  templateInfo: { flex: 1 },
-  templateName: { fontSize: 14, fontWeight: 'bold', color: C.text },
-  templateMeta: { fontSize: 12, color: C.muted, marginTop: 2 },
-  loadBtn: {
-    backgroundColor: C.primary,
-    borderRadius: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-  },
-  loadBtnText: { color: C.card, fontSize: 13, fontWeight: 'bold' },
-  deleteIconBtn: { paddingHorizontal: 4 },
-  deleteIconText: { fontSize: 16 },
-});
-
 // ─── ESEditScreen ─────────────────────────────────────────────────────────────
 
 interface ESEditScreenProps {
   es: ESItem;
   isNew: boolean;
   companyName: string;
-  templates: ESTemplate[];
   onSave: (es: ESItem) => void;
   onDelete: () => void;
   onBack: () => void;
-  onSaveTemplate: (name: string, qaItems: ESTemplateQA[]) => void;
-  onDeleteTemplate: (id: string) => void;
 }
 
-function ESEditScreen({ es, isNew, companyName, templates, onSave, onDelete, onBack, onSaveTemplate, onDeleteTemplate }: ESEditScreenProps) {
+function ESEditScreen({ es, isNew, companyName, onSave, onDelete, onBack }: ESEditScreenProps) {
   const [form, setForm] = useState<ESItem>(es);
   const [showStatusPicker, setShowStatusPicker] = useState(false);
-  const [showSaveTemplate, setShowSaveTemplate] = useState(false);
-  const [showLoadTemplate, setShowLoadTemplate] = useState(false);
   const originalRef = useRef(JSON.stringify(es));
 
   const isDirty = () => JSON.stringify(form) !== originalRef.current;
@@ -2410,28 +2219,6 @@ function ESEditScreen({ es, isNew, companyName, templates, onSave, onDelete, onB
           </TouchableOpacity>
         </View>
 
-        <Text style={esS.sectionTitle}>テンプレート</Text>
-        <View style={esS.templateRow}>
-          <TouchableOpacity
-            style={esS.templateBtn}
-            onPress={() => setShowLoadTemplate(true)}
-          >
-            <Text style={esS.templateBtnText}>読み込む</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[esS.templateBtn, esS.templateBtnSecondary]}
-            onPress={() => {
-              if (qaItems.length === 0) {
-                Alert.alert('設問がありません', 'テンプレートとして保存する設問を先に追加してください。');
-                return;
-              }
-              setShowSaveTemplate(true);
-            }}
-          >
-            <Text style={[esS.templateBtnText, esS.templateBtnTextSecondary]}>保存する</Text>
-          </TouchableOpacity>
-        </View>
-
         <Text style={esS.sectionTitle}>設問・回答</Text>
         {qaItems.length === 0 && (
           <Text style={esS.emptyQA}>設問がありません。下のボタンから追加してください。</Text>
@@ -2472,42 +2259,6 @@ function ESEditScreen({ es, isNew, companyName, templates, onSave, onDelete, onB
         value={form.status}
         onSelect={v => setForm(f => ({ ...f, status: v as ESStatus }))}
         onClose={() => setShowStatusPicker(false)}
-      />
-      <ESTemplateModal
-        visible={showSaveTemplate}
-        mode="save"
-        templates={templates}
-        onSave={name => onSaveTemplate(name, qaItems.map(q => ({ question: q.question, charLimit: q.charLimit })))}
-        onLoad={noop}
-        onDelete={onDeleteTemplate}
-        onClose={() => setShowSaveTemplate(false)}
-      />
-      <ESTemplateModal
-        visible={showLoadTemplate}
-        mode="load"
-        templates={templates}
-        onSave={noop}
-        onLoad={template => {
-          const hasContent = qaItems.some(q => q.question || q.answer);
-          const doLoad = () => setForm(f => ({
-            ...f,
-            qaItems: template.qaItems.map(tq => ({ id: uid(), question: tq.question, answer: '', charLimit: tq.charLimit })),
-          }));
-          if (hasContent) {
-            Alert.alert(
-              'テンプレートを読み込む',
-              '現在の設問・回答は上書きされます。よろしいですか？',
-              [
-                { text: 'キャンセル', style: 'cancel' },
-                { text: '読み込む', style: 'destructive', onPress: doLoad },
-              ],
-            );
-          } else {
-            doLoad();
-          }
-        }}
-        onDelete={onDeleteTemplate}
-        onClose={() => setShowLoadTemplate(false)}
       />
     </View>
   );
@@ -2572,25 +2323,6 @@ const esS = StyleSheet.create({
   statusDot: { width: 10, height: 10, borderRadius: 5, marginRight: 8 },
   selectValue: { flex: 1, fontSize: 14, color: C.text },
   selectArrow: { fontSize: 11, color: C.muted },
-  templateRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 4,
-  },
-  templateBtn: {
-    flex: 1,
-    backgroundColor: C.primary,
-    borderRadius: 10,
-    paddingVertical: 11,
-    alignItems: 'center',
-  },
-  templateBtnSecondary: {
-    backgroundColor: C.card,
-    borderWidth: 1,
-    borderColor: C.primary,
-  },
-  templateBtnText: { color: C.card, fontSize: 14, fontWeight: 'bold' },
-  templateBtnTextSecondary: { color: C.primary },
   emptyQA: { fontSize: 13, color: C.muted, textAlign: 'center', marginBottom: 8 },
   addQABtn: {
     borderWidth: 1,
@@ -2629,7 +2361,6 @@ function JobManagementScreen() {
   const { uid, isDemo } = useAuth();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [globalFields, setGlobalFields] = useState<GlobalField[]>([]);
-  const [esTemplates, setEsTemplates] = useState<ESTemplate[]>([]);
   const [view, setView] = useState<ViewState>({ mode: 'list' });
   const viewRef = useRef(view);
   viewRef.current = view;
@@ -2662,8 +2393,7 @@ function JobManagementScreen() {
       Promise.all([
         AsyncStorage.getItem(STORAGE_KEY),
         AsyncStorage.getItem(GLOBAL_FIELDS_KEY),
-        AsyncStorage.getItem(TEMPLATES_KEY),
-      ]).then(([cJson, fJson, tJson]) => {
+      ]).then(([cJson, fJson]) => {
         let loaded: Company[] = [];
         try {
           loaded = cJson ? JSON.parse(cJson) : [];
@@ -2680,16 +2410,8 @@ function JobManagementScreen() {
           fields = [];
           AsyncStorage.removeItem(GLOBAL_FIELDS_KEY).catch(err => console.warn('Failed to remove corrupt storage:', err));
         }
-        let tmplts: ESTemplate[] = [];
-        try {
-          tmplts = tJson ? JSON.parse(tJson) : [];
-          if (!Array.isArray(tmplts)) tmplts = [];
-        } catch {
-          tmplts = [];
-        }
         if (loaded.length) setCompanies(loaded);
         if (fields.length) setGlobalFields(fields);
-        if (tmplts.length) setEsTemplates(tmplts);
         // Re-sync all notifications in case reminder days changed in Settings
         loaded.forEach(c => syncNotifications(c));
       }).catch(() => {});
@@ -2697,8 +2419,7 @@ function JobManagementScreen() {
       Promise.all([
         getDocs(collection(db, 'users', uid, 'job_companies')),
         getDoc(doc(db, 'users', uid, 'job_settings', 'global_fields')),
-        getDoc(doc(db, 'users', uid, 'job_settings', 'es_templates')),
-      ]).then(([snap, fSnap, tSnap]) => {
+      ]).then(([snap, fSnap]) => {
         const loaded = snap.docs.map(d => {
           const data = d.data() as Partial<Company> & { entrySheets?: unknown[] };
           // 旧フォーマット移行: entrySheets配列の先頭をentrySheetに
@@ -2724,7 +2445,6 @@ function JobManagementScreen() {
         });
         setCompanies(loaded);
         if (fSnap.exists()) setGlobalFields(fSnap.data().fields ?? []);
-        if (tSnap.exists()) setEsTemplates(tSnap.data().templates ?? []);
         // Re-sync all notifications in case reminder days changed in Settings
         loaded.forEach(c => syncNotifications(c));
       }).catch(() => {});
@@ -2769,34 +2489,6 @@ function JobManagementScreen() {
     }
   }, [uid, isDemo]);
 
-  // ESテンプレートを保存
-  const saveEsTemplate = useCallback((name: string, qaItems: ESTemplateQA[]) => {
-    const newId = Math.random().toString(36).slice(2) + Date.now().toString(36);
-    const template: ESTemplate = { id: newId, name, createdAt: nowISO(), qaItems };
-    setEsTemplates(prev => {
-      const next = [...prev, template];
-      if (isDemo) {
-        AsyncStorage.setItem(TEMPLATES_KEY, JSON.stringify(next)).catch(() => {});
-      } else if (uid) {
-        setDoc(doc(db, 'users', uid, 'job_settings', 'es_templates'), { templates: next }).catch(() => {});
-      }
-      return next;
-    });
-  }, [uid, isDemo]);
-
-  // ESテンプレートを削除
-  const deleteEsTemplate = useCallback((templateId: string) => {
-    setEsTemplates(prev => {
-      const next = prev.filter(t => t.id !== templateId);
-      if (isDemo) {
-        AsyncStorage.setItem(TEMPLATES_KEY, JSON.stringify(next)).catch(() => {});
-      } else if (uid) {
-        setDoc(doc(db, 'users', uid, 'job_settings', 'es_templates'), { templates: next }).catch(() => {});
-      }
-      return next;
-    });
-  }, [uid, isDemo]);
-
   // viewモード・detailモードでcompanyが見つからない場合はリストに戻る
   useEffect(() => {
     const currentView = viewRef.current;
@@ -2817,7 +2509,6 @@ function JobManagementScreen() {
         es={view.draft}
         isNew={!company.entrySheet}
         companyName={company.name}
-        templates={esTemplates}
         onSave={(updated) => {
           saveCompany({ ...company, entrySheet: updated });
         }}
@@ -2825,8 +2516,6 @@ function JobManagementScreen() {
           saveCompany({ ...company, entrySheet: null });
         }}
         onBack={() => setView({ mode: 'view', companyId: view.companyId })}
-        onSaveTemplate={saveEsTemplate}
-        onDeleteTemplate={deleteEsTemplate}
       />
     );
   }
