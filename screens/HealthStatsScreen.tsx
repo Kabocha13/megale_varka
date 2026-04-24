@@ -27,7 +27,7 @@ const APPETITE_META: Record<AppetiteValue, { label: string; iconName: MaterialIc
   water:    { label: '水',         iconName: 'opacity', color: '#7FA8D0' },
   noodles:  { label: '麺類',       iconName: 'ramen-dining', color: '#E0B877' },
   set_meal: { label: '定食',       iconName: 'set-meal', color: '#6EA56E' },
-  steak:    { label: 'ステーキ',   iconName: 'dinner-dining', color: '#8E5A3C' },
+  steak:    { label: 'ステーキ',   iconName: 'outdoor-grill', color: '#8E5A3C' },
 };
 
 function shortDayLabel(dateStr: string): string {

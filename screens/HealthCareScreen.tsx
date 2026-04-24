@@ -59,7 +59,7 @@ const APPETITE_OPTIONS: { value: AppetiteValue; iconName: MaterialIconName; labe
   { value: 'water',    iconName: 'opacity', label: '水' },
   { value: 'noodles',  iconName: 'ramen-dining', label: '麺類' },
   { value: 'set_meal', iconName: 'set-meal', label: '定食' },
-  { value: 'steak',    iconName: 'dinner-dining', label: 'ステーキ' },
+  { value: 'steak',    iconName: 'outdoor-grill', label: 'ステーキ' },
 ];
 
 // CES-D style daily check-in questions. One is shown per day, deterministically
