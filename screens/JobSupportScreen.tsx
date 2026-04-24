@@ -40,6 +40,30 @@ export default function JobSupportScreen() {
         </View>
       </View>
 
+      <View style={s.content}>
+        <View style={s.card}>
+          <Text style={s.cardText}>
+            今日の分のおみくじを引いて運気を見てみよう。
+          </Text>
+          
+          {/* おみくじ完了後はボタンの文字を変えるなどすると親切です */}
+          <TouchableOpacity 
+            style={s.drawButton} 
+            onPress={() => setModalVisible(true)}
+          >
+            <Text style={s.drawButtonText}>
+              {mentalRecovered ? "引いたおみくじを見る" : "おみくじを開く"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* インポートしたおみくじモーダルを配置 */}
+      <OmikujiModal 
+        visible={modalVisible} 
+        onClose={() => setModalVisible(false)}
+        onMentalRecovered={handleMentalRecovered}
+      />
       {/* コンテンツ部分（シュレッダー機能のみ） */}
       <View style={s.content}>
         <ShredderInput 
