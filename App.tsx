@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { ChatIcon, HomeIcon, SettingsIcon, WorkIcon } from './components/NavIcons';
+import SplashScreen from './components/SplashScreen';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
 import HealthCareScreen from './screens/HealthCareScreen';
@@ -139,6 +140,8 @@ function AppContent() {
 }
 
 function App() {
+  const [splashDone, setSplashDone] = useState(false);
+
   useEffect(() => {
     // Request permissions sequentially so dialogs don't stack
     (async () => {
@@ -152,6 +155,7 @@ function App() {
       <AuthProvider>
         <AppContent />
       </AuthProvider>
+      {!splashDone && <SplashScreen onDone={() => setSplashDone(true)} />}
     </SafeAreaProvider>
   );
 }

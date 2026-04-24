@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="12dp"
+    android:background="@drawable/widget_background">
+
+    <ImageView
+        android:id="@+id/flame_icon"
+        android:layout_width="52dp"
+        android:layout_height="52dp"
+        android:src="@drawable/ic_flame_inactive"
+        android:contentDescription="炎" />
+
+    <TextView
+        android:id="@+id/streak_count"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="0"
+        android:textSize="28sp"
+        android:textStyle="bold"
+        android:textColor="#1A1A2E"
+        android:layout_marginTop="4dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="日連続"
+        android:textSize="11sp"
+        android:textColor="#666666"
+        android:layout_marginTop="2dp" />
+
+</LinearLayout>
