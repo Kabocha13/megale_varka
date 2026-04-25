@@ -103,8 +103,8 @@ const HealthManagementScreen = ({ showOnly }: HealthManagementScreenProps) => {
     );
   }
 
-  return (
-    <ScrollView style={styles.container}>
+  const content = (
+    <>
       {showOnly !== 'missions' && (
         <>
           <View style={styles.header}>
@@ -155,6 +155,16 @@ const HealthManagementScreen = ({ showOnly }: HealthManagementScreenProps) => {
         </>
       )}
       <View style={{ height: 60 }} />
+    </>
+  );
+
+  if (showOnly) {
+    return <View style={styles.container}>{content}</View>;
+  }
+
+  return (
+    <ScrollView style={styles.container}>
+      {content}
     </ScrollView>
   );
 };
