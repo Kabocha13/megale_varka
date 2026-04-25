@@ -8,11 +8,12 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { ChatIcon, HomeIcon, SettingsIcon, WorkIcon } from './components/NavIcons';
+import { ChatIcon, HealthManagementIcon,HomeIcon, SettingsIcon, WorkIcon } from './components/NavIcons';
 import SplashScreen from './components/SplashScreen';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
 import HealthCareScreen from './screens/HealthCareScreen';
+import HealthManagementScreen from './screens/HealthManagementScreen';
 import JobManagementScreen from './screens/JobManagementScreen';
 import JobSupportScreen from './screens/JobSupportScreen';
 import LoginScreen from './screens/LoginScreen';
@@ -31,6 +32,7 @@ const COLOR_INACTIVE = '#A8BDD4';
 function TabIcon({ name, active }: { name: TabName; active: boolean }) {
   const color = active ? COLOR_ACTIVE : COLOR_INACTIVE;
   switch (name) {
+    
     case 'health_care':    return <HomeIcon color={color} size={ICON_SIZE} />;
     case 'job_management': return <WorkIcon color={color} size={ICON_SIZE} />;
     case 'job_support':    return <ChatIcon color={color} size={ICON_SIZE} />;

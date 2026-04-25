@@ -1,4 +1,5 @@
 import notifee, { AuthorizationStatus } from '@notifee/react-native';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
@@ -6,8 +7,10 @@ import {
   AppStateStatus,
   Linking,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TouchableOpacity,
   View,
@@ -15,9 +18,15 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { hasRequestedHealthKit, isHealthKitAvailable } from '../services/healthService';
 import {
+  DEFAULT_DAILY_REMINDER,
   DEFAULT_REMINDER_DAYS,
+  DailyReminderConfig,
+  cancelDailyHealthReminder,
+  getDailyReminderConfig,
   getReminderDays,
+  saveDailyReminderConfig,
   saveReminderDays,
+  scheduleDailyHealthReminder,
 } from '../services/notifications';
 
 type PermStatus = 'granted' | 'denied' | 'unavailable' | 'loading';
@@ -69,6 +78,13 @@ export default function SettingsScreen() {
   const [showPicker, setShowPicker] = useState(false);
   const [draft, setDraft] = useState<number[]>(DEFAULT_REMINDER_DAYS);
   const [perms, setPerms] = useState<PermState>({ notification: 'loading', healthKit: 'loading' });
+  const [dailyReminder, setDailyReminder] = useState<DailyReminderConfig>(DEFAULT_DAILY_REMINDER);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [pickerDate, setPickerDate] = useState<Date>(() => {
+    const d = new Date();
+    d.setHours(DEFAULT_DAILY_REMINDER.hour, DEFAULT_DAILY_REMINDER.minute, 0, 0);
+    return d;
+  });
   const appState = useRef(AppState.currentState);
 
   const refreshPerms = useCallback(() => {
@@ -79,6 +95,13 @@ export default function SettingsScreen() {
     getReminderDays().then(days => {
       setReminderDays(days);
       setDraft(days);
+    }).catch(() => {});
+
+    getDailyReminderConfig().then(config => {
+      setDailyReminder(config);
+      const d = new Date();
+      d.setHours(config.hour, config.minute, 0, 0);
+      setPickerDate(d);
     }).catch(() => {});
 
     refreshPerms();
@@ -108,6 +131,52 @@ export default function SettingsScreen() {
     setShowPicker(false);
     await saveReminderDays(draft).catch(() => {});
   };
+
+  const handleToggleDaily = async (enabled: boolean) => {
+    const newConfig = { ...dailyReminder, enabled };
+    setDailyReminder(newConfig);
+    await saveDailyReminderConfig(newConfig).catch(() => {});
+    if (enabled) {
+      await scheduleDailyHealthReminder(newConfig.hour, newConfig.minute).catch(() => {});
+    } else {
+      await cancelDailyHealthReminder().catch(() => {});
+    }
+  };
+
+  const openTimePicker = () => {
+    const d = new Date();
+    d.setHours(dailyReminder.hour, dailyReminder.minute, 0, 0);
+    setPickerDate(d);
+    setShowTimePicker(true);
+  };
+
+  const applyTime = async (hour: number, minute: number) => {
+    const newConfig = { ...dailyReminder, hour, minute };
+    setDailyReminder(newConfig);
+    await saveDailyReminderConfig(newConfig).catch(() => {});
+    if (newConfig.enabled) {
+      await scheduleDailyHealthReminder(hour, minute).catch(() => {});
+    }
+  };
+
+  const handlePickerChange = (_event: DateTimePickerEvent, date?: Date) => {
+    if (!date) {
+      if (Platform.OS === 'android') setShowTimePicker(false);
+      return;
+    }
+    setPickerDate(date);
+    if (Platform.OS === 'android') {
+      setShowTimePicker(false);
+      applyTime(date.getHours(), date.getMinutes()).catch(() => {});
+    }
+  };
+
+  const handleIOSConfirm = () => {
+    setShowTimePicker(false);
+    applyTime(pickerDate.getHours(), pickerDate.getMinutes()).catch(() => {});
+  };
+
+  const timeLabel = `${String(dailyReminder.hour).padStart(2, '0')}:${String(dailyReminder.minute).padStart(2, '0')}`;
 
   const handleLogoutPress = async () => {
     try {
@@ -151,6 +220,33 @@ export default function SettingsScreen() {
       {/* リマインド設定 */}
       <Text style={s.sectionTitle}>通知・リマインド</Text>
       <View style={s.card}>
+        <View style={s.row}>
+          <View style={s.rowLeft}>
+            <Text style={s.rowLabel}>毎日リマインダー</Text>
+            <Text style={s.rowSub}>ヘルス記録を毎日お知らせ</Text>
+          </View>
+          <Switch
+            value={dailyReminder.enabled}
+            onValueChange={handleToggleDaily}
+            trackColor={{ false: C.border, true: C.primary }}
+            thumbColor="#fff"
+          />
+        </View>
+        {dailyReminder.enabled && (
+          <>
+            <View style={s.divider} />
+            <View style={s.row}>
+              <View style={s.rowLeft}>
+                <Text style={s.rowLabel}>通知時刻</Text>
+              </View>
+              <TouchableOpacity style={s.valueBtn} onPress={openTimePicker}>
+                <Text style={s.valueBtnText}>{timeLabel}</Text>
+                <Text style={s.arrow}>▼</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+        <View style={s.divider} />
         <View style={s.row}>
           <View style={s.rowLeft}>
             <Text style={s.rowLabel}>タスクリマインド</Text>
@@ -199,6 +295,41 @@ export default function SettingsScreen() {
           <Text style={s.logoutText}>ログアウト</Text>
         </TouchableOpacity>
       </View>
+
+      {/* 毎日リマインダー 時刻ピッカー（Android） */}
+      {showTimePicker && Platform.OS === 'android' && (
+        <DateTimePicker
+          mode="time"
+          value={pickerDate}
+          is24Hour
+          onChange={handlePickerChange}
+        />
+      )}
+
+      {/* 毎日リマインダー 時刻ピッカー（iOS） */}
+      <Modal visible={showTimePicker && Platform.OS === 'ios'} transparent animationType="fade" onRequestClose={() => setShowTimePicker(false)}>
+        <View style={s.overlay}>
+          <View style={s.pickerSheet}>
+            <Text style={s.pickerTitle}>通知時刻</Text>
+            <DateTimePicker
+              mode="time"
+              value={pickerDate}
+              is24Hour
+              display="spinner"
+              onChange={handlePickerChange}
+              style={s.iosTimePicker}
+            />
+            <View style={s.pickerActions}>
+              <TouchableOpacity style={s.pickerCancelBtn} onPress={() => setShowTimePicker(false)}>
+                <Text style={s.pickerCancelText}>キャンセル</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.pickerConfirmBtn} onPress={handleIOSConfirm}>
+                <Text style={s.pickerConfirmText}>完了</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* リマインド日数ピッカー（複数選択） */}
       <Modal visible={showPicker} transparent animationType="fade" onRequestClose={() => setShowPicker(false)}>
@@ -437,4 +568,5 @@ const s = StyleSheet.create({
     backgroundColor: C.primary,
   },
   pickerConfirmText: { color: '#FFF', fontSize: 15, fontWeight: 'bold' },
+  iosTimePicker: { width: '100%', height: 180 },
 });
