@@ -136,7 +136,7 @@ const HealthManagementScreen = () => {
 
       <Text style={styles.sectionTitle}>心の休養休息</Text>
       <View style={styles.listCard}>
-        {['好きな飲み物を飲む', '音楽を聴く', '外の空気を吸う', 'マインドフルネス'].map((label, i) => (
+        {['好きな飲み物を飲む', '音楽を聴く', '外の空気を吸う', '3分間の瞑想'].map((label, i) => (
           <CheckItem key={i} label={label} checked={mentalChecks[i]} onPress={() => {
             const n = [...mentalChecks]; n[i] = !n[i]; setMentalChecks(n);
           }} />

@@ -22,7 +22,7 @@ import SettingsScreen from './screens/SettingsScreen';
 import { requestHealthKitPermissions } from './services/healthService';
 import { requestNotificationPermission } from './services/notifications';
 
-type TabName = 'health_care' |'health_management' | 'job_management' | 'job_support' | 'settings';
+type TabName = 'health_care' | 'job_management' | 'job_support' | 'settings';
 type AuthScreen = 'login' | 'register' | 'forgot_password';
 
 const ICON_SIZE = 28;
@@ -34,7 +34,6 @@ function TabIcon({ name, active }: { name: TabName; active: boolean }) {
   switch (name) {
     
     case 'health_care':    return <HomeIcon color={color} size={ICON_SIZE} />;
-    case 'health_management': return <HealthManagementIcon color={color} size={ICON_SIZE} />;
     case 'job_management': return <WorkIcon color={color} size={ICON_SIZE} />;
     case 'job_support':    return <ChatIcon color={color} size={ICON_SIZE} />;
     case 'settings':       return <SettingsIcon color={color} size={ICON_SIZE} />;
@@ -42,12 +41,11 @@ function TabIcon({ name, active }: { name: TabName; active: boolean }) {
   }
 }
 
-const TABS: TabName[] = ['health_care','health_management', 'job_management', 'job_support', 'settings'];
+const TABS: TabName[] = ['health_care', 'job_management', 'job_support', 'settings'];
 
 function renderScreen(tab: TabName) {
   switch (tab) {
     case 'health_care':    return <HealthCareScreen />;
-    case 'health_management': return <HealthManagementScreen />;
     case 'job_management': return <JobManagementScreen />;
     case 'job_support':    return <JobSupportScreen />;
     case 'settings':       return <SettingsScreen />;
