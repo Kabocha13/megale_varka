@@ -64,7 +64,7 @@ function daysLabel(selected: number[]): string {
 }
 
 export default function SettingsScreen() {
-  const { logout } = useAuth();
+  const { email, logout } = useAuth();
   const [reminderDays, setReminderDays] = useState<number[]>(DEFAULT_REMINDER_DAYS);
   const [showPicker, setShowPicker] = useState(false);
   const [draft, setDraft] = useState<number[]>(DEFAULT_REMINDER_DAYS);
@@ -160,6 +160,11 @@ export default function SettingsScreen() {
       {/* ログアウト */}
       <Text style={s.sectionTitle}>アカウント</Text>
       <View style={s.card}>
+        <View style={s.accountRow}>
+          <Text style={s.accountLabel}>メールアドレス</Text>
+          <Text style={s.accountEmail} numberOfLines={1}>{email}</Text>
+        </View>
+        <View style={s.divider} />
         <TouchableOpacity style={s.logoutRow} onPress={handleLogoutPress}>
           <Text style={s.logoutText}>ログアウト</Text>
         </TouchableOpacity>
@@ -317,6 +322,9 @@ const s = StyleSheet.create({
     alignItems: 'center',
   },
   openSettingsBtnText: { color: '#FFF', fontSize: 14, fontWeight: 'bold' },
+  accountRow: { paddingVertical: 14, paddingHorizontal: 16 },
+  accountLabel: { fontSize: 12, color: C.muted, marginBottom: 4 },
+  accountEmail: { fontSize: 15, color: C.text, fontWeight: '500' },
   logoutRow: { paddingVertical: 14, paddingHorizontal: 16, alignItems: 'center' },
   logoutText: { color: C.danger, fontSize: 16, fontWeight: 'bold' },
   overlay: {
