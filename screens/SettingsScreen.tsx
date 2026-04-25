@@ -64,7 +64,7 @@ function daysLabel(selected: number[]): string {
 }
 
 export default function SettingsScreen() {
-  const { logout } = useAuth();
+  const { email, logout } = useAuth();
   const [reminderDays, setReminderDays] = useState<number[]>(DEFAULT_REMINDER_DAYS);
   const [showPicker, setShowPicker] = useState(false);
   const [draft, setDraft] = useState<number[]>(DEFAULT_REMINDER_DAYS);
@@ -117,6 +117,12 @@ export default function SettingsScreen() {
     }
   };
 
+  const handleOpenIbasho = () => {
+    Linking.openURL('https://talkme.jp/').catch(() => {
+      Alert.alert('エラー', 'ページを開けませんでした。時間をおいてもう一度お試しください。');
+    });
+  };
+
   return (
     <ScrollView style={s.container} contentContainerStyle={s.content}>
       <Text style={s.title}>設定</Text>
@@ -157,9 +163,38 @@ export default function SettingsScreen() {
         </View>
       </View>
 
+      {/* 相談窓口 */}
+      <Text style={s.sectionTitle}>相談窓口</Text>
+      <View style={s.card}>
+        <View style={s.infoBlock}>
+          <Text style={s.infoTitle}>特定非営利活動法人 あなたのいばしょ</Text>
+          <Text style={s.infoText}>
+            24時間365日、年齢や性別を問わず、誰でも無料・匿名で利用できるチャット相談窓口です。
+            ここはいつでも、だれでもチャットで相談できます。あなたのひみつは守ります。
+            まずはお話してみませんか。
+          </Text>
+          <View style={s.infoMetaRow}>
+            <Text style={s.infoMetaLabel}>実施日時</Text>
+            <Text style={s.infoMetaText}>24時間365日</Text>
+          </View>
+          <View style={s.infoMetaRow}>
+            <Text style={s.infoMetaLabel}>チャット</Text>
+            <Text style={s.infoMetaText}>あなたのいばしょチャット相談</Text>
+          </View>
+          <TouchableOpacity style={s.linkButton} onPress={handleOpenIbasho}>
+            <Text style={s.linkButtonText}>団体ホームページを開く</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
       {/* ログアウト */}
       <Text style={s.sectionTitle}>アカウント</Text>
       <View style={s.card}>
+        <View style={s.accountRow}>
+          <Text style={s.accountLabel}>メールアドレス</Text>
+          <Text style={s.accountEmail} numberOfLines={1}>{email}</Text>
+        </View>
+        <View style={s.divider} />
         <TouchableOpacity style={s.logoutRow} onPress={handleLogoutPress}>
           <Text style={s.logoutText}>ログアウト</Text>
         </TouchableOpacity>
@@ -317,6 +352,27 @@ const s = StyleSheet.create({
     alignItems: 'center',
   },
   openSettingsBtnText: { color: '#FFF', fontSize: 14, fontWeight: 'bold' },
+  infoBlock: { paddingVertical: 16, paddingHorizontal: 16 },
+  infoTitle: { fontSize: 16, color: C.text, fontWeight: 'bold', marginBottom: 8 },
+  infoText: { fontSize: 13, color: C.sub, lineHeight: 21, marginBottom: 14 },
+  infoMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingVertical: 5,
+  },
+  infoMetaLabel: { width: 72, fontSize: 12, color: C.muted, fontWeight: 'bold' },
+  infoMetaText: { flex: 1, fontSize: 13, color: C.text, fontWeight: '500' },
+  linkButton: {
+    marginTop: 12,
+    paddingVertical: 11,
+    borderRadius: 8,
+    backgroundColor: '#F0F4FA',
+    alignItems: 'center',
+  },
+  linkButtonText: { color: C.primary, fontSize: 14, fontWeight: 'bold' },
+  accountRow: { paddingVertical: 14, paddingHorizontal: 16 },
+  accountLabel: { fontSize: 12, color: C.muted, marginBottom: 4 },
+  accountEmail: { fontSize: 15, color: C.text, fontWeight: '500' },
   logoutRow: { paddingVertical: 14, paddingHorizontal: 16, alignItems: 'center' },
   logoutText: { color: C.danger, fontSize: 16, fontWeight: 'bold' },
   overlay: {

@@ -1639,10 +1639,11 @@ interface CompanyDetailScreenProps {
   onUpdateGlobalFields: (fields: GlobalField[]) => void;
   onSave: (c: Company) => void;
   onDelete: () => void;
+  onNavigateToES?: (c: Company) => void;
   onBack: () => void;
 }
 
-function CompanyDetailScreen({ company, isNew, globalFields, onUpdateGlobalFields, onSave, onDelete, onBack }: CompanyDetailScreenProps) {
+function CompanyDetailScreen({ company, isNew, globalFields, onUpdateGlobalFields, onSave, onDelete, onNavigateToES, onBack }: CompanyDetailScreenProps) {
   const [form, setForm] = useState<Company>(company);
   const [picker, setPicker] = useState<'goal' | 'desire' | 'status' | null>(null);
   const [showGlobalFieldsModal, setShowGlobalFieldsModal] = useState(false);
@@ -1672,6 +1673,16 @@ function CompanyDetailScreen({ company, isNew, globalFields, onUpdateGlobalField
     onSave(form);
     originalRef.current = JSON.stringify(form);
     onBack();
+  };
+
+  const handleNavigateToES = () => {
+    if (!form.name.trim()) {
+      Alert.alert('エラー', '会社名を入力してください。');
+      return;
+    }
+    onSave(form);
+    originalRef.current = JSON.stringify(form);
+    onNavigateToES?.(form);
   };
 
   const handleDelete = () => {
@@ -1764,6 +1775,33 @@ function CompanyDetailScreen({ company, isNew, globalFields, onUpdateGlobalField
             onPress={() => setPicker('desire')}
           />
         </View>
+
+        {!isNew && (
+          <>
+            <Text style={dS.sectionTitle}>エントリーシート</Text>
+            <View style={dS.section}>
+              <View style={dS.esHeader}>
+                <View style={dS.esInfo}>
+                  <Text style={dS.esTitle}>
+                    {form.entrySheet ? 'ESを編集中' : 'まだ作成されていません'}
+                  </Text>
+                  {form.entrySheet ? (
+                    <View style={[esVS.statusBadge, { backgroundColor: ES_STATUS_COLOR[form.entrySheet.status] }]}>
+                      <Text style={esVS.statusBadgeText}>{form.entrySheet.status}</Text>
+                    </View>
+                  ) : null}
+                </View>
+                <TouchableOpacity
+                  style={dS.esActionBtn}
+                  onPress={handleNavigateToES}
+                  accessibilityRole="button"
+                >
+                  <Text style={dS.esActionBtnText}>{form.entrySheet ? '編集' : '作成'}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </>
+        )}
 
         {/* ── タスク管理 ── */}
         <Text style={dS.sectionTitle}>タスク管理</Text>
@@ -1923,6 +1961,21 @@ const dS = StyleSheet.create({
   },
   inputMulti: { minHeight: 72, textAlignVertical: 'top' },
   inputMemo: { minHeight: 100, textAlignVertical: 'top' },
+  esHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  esInfo: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  esTitle: { flexShrink: 1, fontSize: 14, color: C.text, fontWeight: '600' },
+  esActionBtn: {
+    backgroundColor: C.primary,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  esActionBtnText: { color: C.card, fontSize: 14, fontWeight: 'bold' },
   sectionTitleRow: { flexDirection: 'row', alignItems: 'center', marginTop: 16, marginBottom: 4 },
   subHeader: {
     flexDirection: 'row',
@@ -2580,6 +2633,10 @@ function JobManagementScreen() {
         onUpdateGlobalFields={persistGlobalFields}
         onSave={saveCompany}
         onDelete={() => removeCompany(view.companyId, company.tasks)}
+        onNavigateToES={(updatedCompany) => {
+          const draft = updatedCompany.entrySheet ?? makeEmptyES();
+          setView({ mode: 'es', companyId: view.companyId, draft });
+        }}
         onBack={() => setView({ mode: 'list' })}
       />
     );
