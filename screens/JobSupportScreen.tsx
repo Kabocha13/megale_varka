@@ -455,10 +455,6 @@ function JobSupportHome({ onOpenCareerFit }: { onOpenCareerFit: () => void }) {
         <Text style={styles.title}>就活サポート</Text>
       </View>
 
-      <View style={styles.statusSection}>
-        <HealthManagementScreen showOnly="stats" />
-      </View>
-
       <TouchableOpacity
         style={styles.featureCard}
         onPress={onOpenCareerFit}
@@ -467,6 +463,10 @@ function JobSupportHome({ onOpenCareerFit }: { onOpenCareerFit: () => void }) {
       >
         <Text style={styles.featureTitle}>適職診断</Text>
       </TouchableOpacity>
+
+      <View style={styles.statusSection}>
+        <HealthManagementScreen showOnly="stats" />
+      </View>
 
       <View style={styles.checklistSection}>
         <HealthManagementScreen showOnly="missions" />
@@ -507,19 +507,20 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: C.border,
-    minHeight: 132,
-    paddingHorizontal: 20,
-    paddingVertical: 28,
+    minHeight: 92,
+    paddingHorizontal: 18,
+    paddingVertical: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
   featureTitle: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: 'bold',
     color: C.primary,
     textAlign: 'center',
   },
   statusSection: {
+    marginTop: 20,
     marginBottom: 20,
   },
   checklistSection: {
