@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import notifee, {
   AndroidImportance,
   AuthorizationStatus,
+  RepeatFrequency,
   TimestampTrigger,
   TriggerType,
 } from '@notifee/react-native';
@@ -11,6 +12,22 @@ export const DEFAULT_REMINDER_DAYS: number[] = [1];
 export const ALL_REMINDER_DAY_OPTIONS = [0, 1, 2, 3, 7, 14];
 
 const CHANNEL_ID = 'job_tasks';
+
+export const DAILY_REMINDER_KEY = '@daily_health_reminder_v1';
+const DAILY_REMINDER_CHANNEL_ID = 'health_reminder';
+const DAILY_REMINDER_NOTIF_ID = 'daily_health_reminder';
+
+export interface DailyReminderConfig {
+  enabled: boolean;
+  hour: number;
+  minute: number;
+}
+
+export const DEFAULT_DAILY_REMINDER: DailyReminderConfig = {
+  enabled: false,
+  hour: 20,
+  minute: 0,
+};
 
 // ─── 設定 ─────────────────────────────────────────────────────────────────────
 
@@ -124,4 +141,76 @@ export async function cancelTaskNotification(taskId: string): Promise<void> {
       notifee.cancelTriggerNotification(`${taskId}_${d}d`).catch(() => {}),
     ),
   );
+}
+
+// ─── 毎日ヘルス記録リマインダー ───────────────────────────────────────────────
+
+export async function getDailyReminderConfig(): Promise<DailyReminderConfig> {
+  const val = await AsyncStorage.getItem(DAILY_REMINDER_KEY);
+  if (val === null) return { ...DEFAULT_DAILY_REMINDER };
+  try {
+    const parsed: unknown = JSON.parse(val);
+    if (
+      parsed !== null &&
+      typeof parsed === 'object' &&
+      'enabled' in parsed &&
+      'hour' in parsed &&
+      'minute' in parsed &&
+      typeof (parsed as DailyReminderConfig).enabled === 'boolean' &&
+      typeof (parsed as DailyReminderConfig).hour === 'number' &&
+      typeof (parsed as DailyReminderConfig).minute === 'number'
+    ) {
+      return parsed as DailyReminderConfig;
+    }
+    return { ...DEFAULT_DAILY_REMINDER };
+  } catch {
+    return { ...DEFAULT_DAILY_REMINDER };
+  }
+}
+
+export async function saveDailyReminderConfig(config: DailyReminderConfig): Promise<void> {
+  await AsyncStorage.setItem(DAILY_REMINDER_KEY, JSON.stringify(config));
+}
+
+async function ensureHealthReminderChannel(): Promise<string> {
+  await notifee.createChannel({
+    id: DAILY_REMINDER_CHANNEL_ID,
+    name: 'ヘルス記録リマインダー',
+    importance: AndroidImportance.HIGH,
+  });
+  return DAILY_REMINDER_CHANNEL_ID;
+}
+
+export async function scheduleDailyHealthReminder(hour: number, minute: number): Promise<void> {
+  await cancelDailyHealthReminder();
+
+  const channelId = await ensureHealthReminderChannel();
+
+  const now = new Date();
+  const trigger = new Date();
+  trigger.setHours(hour, minute, 0, 0);
+  if (trigger.getTime() <= now.getTime()) {
+    trigger.setDate(trigger.getDate() + 1);
+  }
+
+  const timestampTrigger: TimestampTrigger = {
+    type: TriggerType.TIMESTAMP,
+    timestamp: trigger.getTime(),
+    repeatFrequency: RepeatFrequency.DAILY,
+  };
+
+  await notifee.createTriggerNotification(
+    {
+      id: DAILY_REMINDER_NOTIF_ID,
+      title: '健康記録のリマインダー',
+      body: '今日の健康データを記録しましょう！',
+      android: { channelId, importance: AndroidImportance.HIGH },
+      ios: { sound: 'default' },
+    },
+    timestampTrigger,
+  );
+}
+
+export async function cancelDailyHealthReminder(): Promise<void> {
+  await notifee.cancelTriggerNotification(DAILY_REMINDER_NOTIF_ID).catch(() => {});
 }
