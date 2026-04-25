@@ -75,6 +75,26 @@ npm test   # Jest によるユニットテスト
 npm run lint  # ESLint
 ```
 
+## AI API 接続
+
+適職診断チャットは、アプリから直接 OpenAI/Gemini API を呼ばず、Firebase Callable Functions 経由で呼び出します。
+モバイルアプリに API Key を入れるとアプリ解析で漏れる可能性があるため、AI の秘密鍵は Firebase Functions の Secret Manager に保存してください。
+
+```bash
+# Functions 依存関係
+cd functions
+npm install
+cd ..
+
+# OpenAI API Key を Secret Manager に保存
+firebase functions:secrets:set OPENAI_API_KEY
+
+# Functions をデプロイ
+firebase deploy --only functions:careerFitChat
+```
+
+必要に応じて Functions 側の `OPENAI_MODEL` 環境変数でモデル名を変更できます。Gemini を使う場合も、アプリ側ではなく `functions/index.js` のサーバー処理だけを差し替える構成にしてください。
+
 ## 便利な操作
 
 | 操作 | iOS | Android |

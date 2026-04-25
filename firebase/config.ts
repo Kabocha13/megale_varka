@@ -22,7 +22,7 @@ const firebaseConfig = {
   appId: FIREBASE_APP_ID,
 };
 
-const app = initializeApp(firebaseConfig);
+export const app = initializeApp(firebaseConfig);
 
 // AsyncStorage を使って認証状態をデバイスに永続化する
 export const auth = initializeAuth(app, {
