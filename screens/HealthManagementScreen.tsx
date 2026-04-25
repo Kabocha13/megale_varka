@@ -4,7 +4,11 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 
-const HealthManagementScreen = () => {
+type HealthManagementScreenProps = {
+  showOnly?: 'stats' | 'missions';
+};
+
+const HealthManagementScreen = ({ showOnly }: HealthManagementScreenProps) => {
   const { uid } = useAuth();
   const [loading, setLoading] = useState(true);
   
@@ -101,47 +105,55 @@ const HealthManagementScreen = () => {
 
   return (
     <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>健康管理ステータス</Text>
-      </View>
-
-      <View style={styles.chartCard}>
-        <View style={styles.statusSection}>
-          <StatusGauge label="身体スタミナ" value={stamina} color={staminaInfo.color} />
-          <View style={styles.conditionRow}>
-            <Text style={styles.conditionLabel}>スタミナ状態: </Text>
-            <Text style={[styles.conditionValue, { color: staminaInfo.color }]}>{staminaInfo.label}</Text>
+      {showOnly !== 'missions' && (
+        <>
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>健康管理ステータス</Text>
           </View>
-        </View>
 
-        <View style={styles.divider} />
+          <View style={styles.chartCard}>
+            <View style={styles.statusSection}>
+              <StatusGauge label="身体スタミナ" value={stamina} color={staminaInfo.color} />
+              <View style={styles.conditionRow}>
+                <Text style={styles.conditionLabel}>スタミナ状態: </Text>
+                <Text style={[styles.conditionValue, { color: staminaInfo.color }]}>{staminaInfo.label}</Text>
+              </View>
+            </View>
 
-        <View style={styles.statusSection}>
-          <StatusGauge label="メンタル回復" value={mental} color={mentalInfo.color} />
-          <View style={styles.conditionRow}>
-            <Text style={styles.conditionLabel}>メンタル状態: </Text>
-            <Text style={[styles.conditionValue, { color: mentalInfo.color }]}>{mentalInfo.label}</Text>
+            <View style={styles.divider} />
+
+            <View style={styles.statusSection}>
+              <StatusGauge label="メンタル回復" value={mental} color={mentalInfo.color} />
+              <View style={styles.conditionRow}>
+                <Text style={styles.conditionLabel}>メンタル状態: </Text>
+                <Text style={[styles.conditionValue, { color: mentalInfo.color }]}>{mentalInfo.label}</Text>
+              </View>
+            </View>
           </View>
-        </View>
-      </View>
+        </>
+      )}
 
-      <Text style={styles.sectionTitle}>身体の休養休息</Text>
-      <View style={styles.listCard}>
-        {['短時間の仮眠', 'ストレッチ', '入浴', 'こまめな水分補給'].map((label, i) => (
-          <CheckItem key={i} label={label} checked={physicalChecks[i]} onPress={() => {
-            const n = [...physicalChecks]; n[i] = !n[i]; setPhysicalChecks(n);
-          }} />
-        ))}
-      </View>
+      {showOnly !== 'stats' && (
+        <>
+          <Text style={styles.sectionTitle}>身体の休養休息</Text>
+          <View style={styles.listCard}>
+            {['短時間の仮眠', 'ストレッチ', '入浴', 'こまめな水分補給'].map((label, i) => (
+              <CheckItem key={i} label={label} checked={physicalChecks[i]} onPress={() => {
+                const n = [...physicalChecks]; n[i] = !n[i]; setPhysicalChecks(n);
+              }} />
+            ))}
+          </View>
 
-      <Text style={styles.sectionTitle}>心の休養休息</Text>
-      <View style={styles.listCard}>
-        {['好きな飲み物を飲む', '音楽を聴く', '外の空気を吸う', '3分間の瞑想'].map((label, i) => (
-          <CheckItem key={i} label={label} checked={mentalChecks[i]} onPress={() => {
-            const n = [...mentalChecks]; n[i] = !n[i]; setMentalChecks(n);
-          }} />
-        ))}
-      </View>
+          <Text style={styles.sectionTitle}>心の休養休息</Text>
+          <View style={styles.listCard}>
+            {['好きな飲み物を飲む', '音楽を聴く', '外の空気を吸う', '3分間の瞑想'].map((label, i) => (
+              <CheckItem key={i} label={label} checked={mentalChecks[i]} onPress={() => {
+                const n = [...mentalChecks]; n[i] = !n[i]; setMentalChecks(n);
+              }} />
+            ))}
+          </View>
+        </>
+      )}
       <View style={{ height: 60 }} />
     </ScrollView>
   );
