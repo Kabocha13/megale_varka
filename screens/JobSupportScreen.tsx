@@ -455,6 +455,10 @@ function JobSupportHome({ onOpenCareerFit }: { onOpenCareerFit: () => void }) {
         <Text style={styles.title}>就活サポート</Text>
       </View>
 
+      <View style={styles.statusSection}>
+        <HealthManagementScreen showOnly="stats" />
+      </View>
+
       <TouchableOpacity
         style={styles.featureCard}
         onPress={onOpenCareerFit}
@@ -514,6 +518,9 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: C.primary,
     textAlign: 'center',
+  },
+  statusSection: {
+    marginBottom: 20,
   },
   checklistSection: {
     marginTop: 20,
