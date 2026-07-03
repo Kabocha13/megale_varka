@@ -27,9 +27,11 @@ import {
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import {
+  cancelInterviewEveNotification,
   cancelTaskNotification,
   getReminderDays,
   requestNotificationPermission,
+  scheduleInterviewEveNotification,
   scheduleTaskNotification,
 } from '../services/notifications';
 import {
@@ -86,6 +88,8 @@ interface Company {
   memo: string;
   entrySheet: ESItem | null;
   progressXp?: number;
+  nextInterviewDate: string; // YYYY-MM-DD（未設定は ''）
+  nextInterviewTime: string; // HH:mm（未設定は ''）
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -204,6 +208,8 @@ function makeEmptyCompany(): Company {
     globalFieldValues: {},
     memo: '',
     entrySheet: null,
+    nextInterviewDate: '',
+    nextInterviewTime: '',
   };
 }
 
@@ -1075,6 +1081,15 @@ function CompanyViewScreen({ company, globalFields, onEdit, onBack, onToggleTask
           <View style={vS.card}>
             <ViewRow label="マイページURL" value={company.myPageUrl} isUrl />
             <ViewRow label="ログインID" value={company.myPageLoginId} />
+            <ViewRow
+              label="次回面接"
+              value={
+                company.nextInterviewDate
+                  ? `${displayDate(company.nextInterviewDate)}${company.nextInterviewTime ? ` ${company.nextInterviewTime}` : ''}`
+                  : ''
+              }
+              last
+            />
           </View>
         </View>
 
@@ -1487,6 +1502,13 @@ function CompanyListScreen({ companies, onSelect, onEdit, onAdd }: CompanyListSc
                 ) : null}
               </View>
 
+              {!!item.nextInterviewDate && item.nextInterviewDate >= formatDate(new Date()) && (
+                <View style={lS.interviewChip}>
+                  <Text style={lS.interviewChipText}>
+                    🎤 面接 {displayDate(item.nextInterviewDate)}{item.nextInterviewTime ? ` ${item.nextInterviewTime}` : ''}
+                  </Text>
+                </View>
+              )}
               {pc > 0 && (
                 <View style={lS.taskAlert}>
                   <Text style={lS.taskAlertText}>未完了タスク {pc} 件</Text>
@@ -1602,6 +1624,15 @@ const lS = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   taskAlertText: { color: '#E65100', fontSize: 12 },
+  interviewChip: {
+    marginTop: 8,
+    backgroundColor: '#EBF0F8',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    alignSelf: 'flex-start',
+  },
+  interviewChipText: { color: C.primary, fontSize: 12, fontWeight: 'bold' },
   empty: { alignItems: 'center', paddingTop: 72 },
   emptyTitle: { fontSize: 16, color: C.sub, marginBottom: 6 },
   emptySub: { fontSize: 13, color: C.muted },
@@ -1774,6 +1805,43 @@ function CompanyDetailScreen({ company, isNew, globalFields, onUpdateGlobalField
             placeholder="選択してください"
             onPress={() => setPicker('desire')}
           />
+
+          <View style={dS.interviewLabelRow}>
+            <Text style={dS.fieldLabel}>次回面接日時</Text>
+            {!!form.nextInterviewDate && (
+              <TouchableOpacity
+                onPress={() => {
+                  set('nextInterviewDate', '');
+                  set('nextInterviewTime', '');
+                }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={dS.interviewClearText}>クリア</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          <View style={dS.interviewRow}>
+            <View style={dS.interviewDateCol}>
+              <DatePickerField
+                value={form.nextInterviewDate}
+                onChange={v => {
+                  set('nextInterviewDate', v);
+                  if (!form.nextInterviewTime) set('nextInterviewTime', '10:00');
+                }}
+              />
+            </View>
+            <View style={dS.interviewTimeCol}>
+              <TimePickerField
+                value={form.nextInterviewTime || '10:00'}
+                onChange={v => set('nextInterviewTime', v)}
+              />
+            </View>
+          </View>
+          {!!form.nextInterviewDate && (
+            <Text style={dS.interviewNote}>
+              前日の21:00に、早めの就寝を促すリマインダー通知が届きます
+            </Text>
+          )}
         </View>
 
         {!isNew && (
@@ -2011,6 +2079,16 @@ const dS = StyleSheet.create({
   },
   addBtnText: { color: C.primary, fontSize: 14 },
   emptySectionText: { color: C.muted, fontSize: 13, textAlign: 'center', marginBottom: 8 },
+  interviewLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+  },
+  interviewClearText: { fontSize: 12, color: C.danger },
+  interviewRow: { flexDirection: 'row', gap: 8 },
+  interviewDateCol: { flex: 1.5 },
+  interviewTimeCol: { flex: 1 },
+  interviewNote: { fontSize: 11, color: C.light, marginTop: 6 },
   deleteCompanyBtn: {
     marginTop: 24,
     paddingVertical: 14,
@@ -2441,6 +2519,17 @@ function JobManagementScreen() {
         }
       });
     }).catch(() => {});
+    // 面接前夜リマインダー
+    if (company.nextInterviewDate) {
+      scheduleInterviewEveNotification(
+        company.id,
+        company.name,
+        company.nextInterviewDate,
+        company.nextInterviewTime ?? '',
+      ).catch(() => {});
+    } else {
+      cancelInterviewEveNotification(company.id).catch(() => {});
+    }
   }, []);
 
   // 初期データ読み込み・通知権限リクエスト
@@ -2500,6 +2589,8 @@ function JobManagementScreen() {
             memo: data.memo ?? '',
             entrySheet,
             progressXp: typeof data.progressXp === 'number' ? data.progressXp : undefined,
+            nextInterviewDate: typeof data.nextInterviewDate === 'string' ? data.nextInterviewDate : '',
+            nextInterviewTime: typeof data.nextInterviewTime === 'string' ? data.nextInterviewTime : '',
           } as Company;
         });
         setCompanies(loaded);
@@ -2541,6 +2632,7 @@ function JobManagementScreen() {
       deleteDoc(doc(db, 'users', uid, 'job_companies', companyId)).catch(() => {});
     }
     tasks.forEach(t => cancelTaskNotification(t.id).catch(() => {}));
+    cancelInterviewEveNotification(companyId).catch(() => {});
   }, [uid, isDemo]);
 
   // 全社共通項目を保存

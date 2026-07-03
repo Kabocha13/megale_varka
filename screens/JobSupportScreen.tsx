@@ -11,6 +11,7 @@ import {
 import { collection, getDocs, limit, orderBy, query } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
+import LineChart, { LinePoint } from '../components/charts/LineChart';
 import { HealthRecord } from '../services/statsService';
 import {
   calculateJobSearchProgress,
@@ -18,15 +19,20 @@ import {
   JobSearchProgress,
 } from '../services/jobSearchProgress';
 import {
+  buildInterviewRetrospective,
   buildSupportAdvice,
+  buildWeeklyPlan,
   collectUpcomingEvents,
   computeConditionSummary,
   conditionLabel,
+  conditionScoreOf,
   ConditionSummary,
   dateToString,
+  InterviewRetroItem,
   SupportAdvice,
   SupportCompany,
   SupportEvent,
+  WeeklyPlan,
 } from '../services/jobSupport';
 
 const C = {
@@ -47,6 +53,18 @@ const TONE_STYLE = {
   info: { border: '#304E78', bg: '#EFF3F9' },
   good: { border: '#27AE60', bg: '#EEF8F1' },
 } as const;
+
+const WEEKDAY_CHARS = ['日', '月', '火', '水', '木', '金', '土'];
+
+function formatShortDate(dateStr: string): string {
+  const [, m, d] = dateStr.split('-').map(Number);
+  return `${m}/${d}`;
+}
+
+function dayOfWeek(dateStr: string): number {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d).getDay();
+}
 
 // ─── Data loading ────────────────────────────────────────────────────────────
 
@@ -82,20 +100,32 @@ export default function JobSupportScreen() {
   const [events, setEvents] = useState<SupportEvent[]>([]);
   const [advice, setAdvice] = useState<SupportAdvice[]>([]);
   const [progress, setProgress] = useState<JobSearchProgress | null>(null);
+  const [weekly, setWeekly] = useState<WeeklyPlan | null>(null);
+  const [retro, setRetro] = useState<InterviewRetroItem[]>([]);
+  const [chartPoints, setChartPoints] = useState<LinePoint[]>([]);
 
   const load = useCallback(async () => {
     if (!uid) return;
     const today = dateToString(new Date());
     const [companies, records] = await Promise.all([
       loadCompanies(uid, isDemo).catch(() => [] as SupportCompany[]),
-      loadRecentHealthRecords(uid).catch(() => [] as HealthRecord[]),
+      loadRecentHealthRecords(uid, 30).catch(() => [] as HealthRecord[]),
     ]);
-    const cond = computeConditionSummary(records, today);
+    // コンディションは直近7件、傾向分析・振り返りは30日分を使う
+    const cond = computeConditionSummary(records.slice(-7), today);
     const evts = collectUpcomingEvents(companies, today);
     setCondition(cond);
     setEvents(evts);
     setAdvice(buildSupportAdvice(cond, evts, companies));
     setProgress(calculateJobSearchProgress(companies));
+    setWeekly(buildWeeklyPlan(records, evts, today));
+    setRetro(buildInterviewRetrospective(companies, records, today));
+    setChartPoints(
+      records.slice(-14).map(r => {
+        const [, m, d] = r.date.split('-').map(Number);
+        return { label: `${m}/${d}`, value: conditionScoreOf(r) };
+      }),
+    );
   }, [uid, isDemo]);
 
   useEffect(() => {
@@ -179,6 +209,48 @@ export default function JobSupportScreen() {
         })
       )}
 
+      {/* 週間プランニング */}
+      {weekly && (
+        <>
+          <Text style={s.sectionTitle}>今週のプランニング</Text>
+          <View style={s.card}>
+            <View style={s.weekRow}>
+              {weekly.days.map(day => {
+                const [, , dd] = day.date.split('-').map(Number);
+                const kindStyle =
+                  day.kind === 'busy' ? s.dayChipBusy
+                  : day.kind === 'work' ? s.dayChipWork
+                  : day.kind === 'rest' ? s.dayChipRest
+                  : null;
+                return (
+                  <View key={day.date} style={[s.dayChip, kindStyle]}>
+                    <Text style={s.dayChipWeekday}>{WEEKDAY_CHARS[day.weekday]}</Text>
+                    <Text style={s.dayChipDate}>{dd}</Text>
+                    <Text style={s.dayChipMark}>
+                      {day.hasInterview ? '🎤' : day.eventCount > 0 ? `${day.eventCount}件` : day.kind === 'work' ? '◎' : day.kind === 'rest' ? '休' : '　'}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+            <View style={s.weekLegend}>
+              <Text style={s.weekLegendItem}><Text style={{ color: C.warning }}>■</Text> 予定あり</Text>
+              <Text style={s.weekLegendItem}><Text style={{ color: C.success }}>■</Text> 作業おすすめ</Text>
+              <Text style={s.weekLegendItem}><Text style={{ color: C.muted }}>■</Text> 休息推奨</Text>
+            </View>
+            {weekly.recommendedDate ? (
+              <Text style={s.weekNote}>
+                {formatShortDate(weekly.recommendedDate)}（{WEEKDAY_CHARS[dayOfWeek(weekly.recommendedDate)]}）は過去の体調傾向が良い日です。ESの作成や企業研究を進めるのにおすすめです。
+              </Text>
+            ) : weekly.days.every(d => d.tendency === null) ? (
+              <Text style={s.weekNote}>
+                体調記録が増えると、曜日ごとのコンディション傾向から作業に向く日を提案します。
+              </Text>
+            ) : null}
+          </View>
+        </>
+      )}
+
       {/* 直近の予定 */}
       <Text style={s.sectionTitle}>直近の予定（2週間）</Text>
       {events.length === 0 ? (
@@ -205,6 +277,55 @@ export default function JobSupportScreen() {
             </View>
           ))}
         </View>
+      )}
+
+      {/* 体調と選考のふりかえり */}
+      {(chartPoints.length >= 2 || retro.length > 0) && (
+        <>
+          <Text style={s.sectionTitle}>体調と選考のふりかえり</Text>
+          <View style={s.card}>
+            {chartPoints.length >= 2 && (
+              <>
+                <Text style={s.chartCaption}>総合コンディションの推移（直近の記録）</Text>
+                <LineChart data={chartPoints} minY={0} maxY={100} height={150} color={C.primary} />
+              </>
+            )}
+            {retro.length > 0 && (
+              <View style={chartPoints.length >= 2 ? s.retroList : null}>
+                {retro.map((item, i) => {
+                  const info = item.conditionScore !== null ? conditionLabel(item.conditionScore) : null;
+                  return (
+                    <View key={`${item.companyName}_${item.date}`} style={[s.retroRow, i === retro.length - 1 && s.retroRowLast]}>
+                      <Text style={s.retroDate}>{formatShortDate(item.date)}</Text>
+                      <View style={s.retroBody}>
+                        <Text style={s.retroTitle} numberOfLines={1}>
+                          {item.companyName}：{item.title}
+                        </Text>
+                        <Text style={s.retroStatus} numberOfLines={1}>
+                          {item.selectionStatus || '選考状況未設定'}
+                        </Text>
+                      </View>
+                      {info ? (
+                        <View style={[s.retroScoreBadge, { backgroundColor: info.color }]}>
+                          <Text style={s.retroScoreText}>{item.conditionScore}</Text>
+                        </View>
+                      ) : (
+                        <View style={[s.retroScoreBadge, s.retroScoreBadgeEmpty]}>
+                          <Text style={s.retroScoreTextEmpty}>—</Text>
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+            {retro.length > 0 && (
+              <Text style={s.retroHint}>
+                面接当日の体調スコアと選考状況を並べています。自分のベストコンディションのパターンを見つけましょう。
+              </Text>
+            )}
+          </View>
+        </>
       )}
 
       {/* 就活進捗 */}
@@ -312,5 +433,50 @@ const s = StyleSheet.create({
   progressTrack: { height: 10, backgroundColor: '#EEE', borderRadius: 5, overflow: 'hidden', marginBottom: 8 },
   progressBar: { height: '100%', borderRadius: 5, backgroundColor: C.primary },
   progressLabel: { fontSize: 13, color: C.sub },
+  weekRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 4 },
+  dayChip: {
+    flex: 1,
+    alignItems: 'center',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: C.border,
+    paddingVertical: 8,
+    backgroundColor: '#FAFAFA',
+  },
+  dayChipBusy: { backgroundColor: '#FEF7EA', borderColor: C.warning },
+  dayChipWork: { backgroundColor: '#EEF8F1', borderColor: C.success },
+  dayChipRest: { backgroundColor: '#F1F1F1', borderColor: C.muted },
+  dayChipWeekday: { fontSize: 11, color: C.sub },
+  dayChipDate: { fontSize: 15, fontWeight: 'bold', color: C.text, marginVertical: 2 },
+  dayChipMark: { fontSize: 10, color: C.sub },
+  weekLegend: { flexDirection: 'row', gap: 12, marginTop: 10 },
+  weekLegendItem: { fontSize: 11, color: C.sub },
+  weekNote: { fontSize: 12, color: C.sub, marginTop: 8, lineHeight: 18 },
+  chartCaption: { fontSize: 12, color: C.sub, marginBottom: 8 },
+  retroList: { marginTop: 12, borderTopWidth: 1, borderTopColor: C.border },
+  retroRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+    gap: 10,
+  },
+  retroRowLast: { borderBottomWidth: 0 },
+  retroDate: { fontSize: 12, color: C.sub, width: 38 },
+  retroBody: { flex: 1 },
+  retroTitle: { fontSize: 13, color: C.text, fontWeight: '500' },
+  retroStatus: { fontSize: 12, color: C.sub, marginTop: 2 },
+  retroScoreBadge: {
+    borderRadius: 12,
+    minWidth: 36,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    alignItems: 'center',
+  },
+  retroScoreBadgeEmpty: { backgroundColor: '#EEE' },
+  retroScoreText: { color: '#FFF', fontSize: 13, fontWeight: 'bold' },
+  retroScoreTextEmpty: { color: C.muted, fontSize: 13, fontWeight: 'bold' },
+  retroHint: { fontSize: 11, color: C.muted, marginTop: 10, lineHeight: 16 },
   bottomSpace: { height: 40 },
 });
