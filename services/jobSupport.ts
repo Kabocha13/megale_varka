@@ -69,7 +69,8 @@ export type SupportAdviceIcon =
   | 'edit-note'
   | 'local-fire-department'
   | 'spa'
-  | 'business';
+  | 'business'
+  | 'school';
 
 export interface SupportAdvice {
   id: string;
@@ -251,6 +252,78 @@ export function conditionScoreOf(record: HealthRecord): number {
   return Math.round((scoreStamina(record) + scoreMental(record)) / 2);
 }
 
+// ─── Job hunt phase（卒業年度ベース） ─────────────────────────────────────────
+
+export type JobHuntPhaseKey =
+  | 'early'
+  | 'summer_intern'
+  | 'autumn_winter'
+  | 'entry_rush'
+  | 'selection'
+  | 'offer_period';
+
+export interface JobHuntPhase {
+  key: JobHuntPhaseKey;
+  label: string;
+  message: string;
+}
+
+const PHASES: Record<JobHuntPhaseKey, Omit<JobHuntPhase, 'key'>> = {
+  early: {
+    label: '就活準備期',
+    message: '自己分析や業界研究を進める時期です。健康記録で生活リズムの土台をつくっておくと、忙しくなってからも崩れにくくなります。',
+  },
+  summer_intern: {
+    label: 'サマーインターン期',
+    message: 'サマーインターンのES締切が集中する時期です。締切の前倒しと体調管理を両立させましょう。',
+  },
+  autumn_winter: {
+    label: '秋冬インターン・早期選考期',
+    message: '秋冬インターンや早期選考が動く時期です。本選考を見据えてESのストックと面接経験を積みましょう。',
+  },
+  entry_rush: {
+    label: 'エントリー期（広報解禁）',
+    message: 'エントリーとES提出が集中する時期です。締切の前倒しと睡眠の確保を最優先に。無理な詰め込みは禁物です。',
+  },
+  selection: {
+    label: '選考本番期（選考解禁）',
+    message: '面接が本格化する時期です。面接前日の睡眠と当日のコンディションづくりを何より優先しましょう。',
+  },
+  offer_period: {
+    label: '内定期',
+    message: '内定・意思決定の時期です。残りの選考と進路の決断を、体調を整えながら自分のペースで進めましょう。',
+  },
+};
+
+/** 卒業年度の短縮表記（2027 → 「27卒」）。 */
+export function gradYearShortLabel(graduationYear: number): string {
+  return `${graduationYear % 100}卒`;
+}
+
+/**
+ * 卒業年度（YYYY年3月卒）と今日の日付から、就活の標準スケジュール上の
+ * フェーズを返す。卒業後（Y年4月以降）は null。
+ * 目安: 卒業2年前の6月にサマーインターン、卒業前年の3月1日に広報解禁、
+ * 6月1日に選考解禁、10月1日に内定式。
+ */
+export function currentJobHuntPhase(graduationYear: number, today: string): JobHuntPhase | null {
+  const y = graduationYear;
+  const boundaries: { from: string; key: JobHuntPhaseKey }[] = [
+    { from: `${y - 1}-10-01`, key: 'offer_period' },
+    { from: `${y - 1}-06-01`, key: 'selection' },
+    { from: `${y - 1}-03-01`, key: 'entry_rush' },
+    { from: `${y - 2}-10-01`, key: 'autumn_winter' },
+    { from: `${y - 2}-06-01`, key: 'summer_intern' },
+  ];
+  if (today >= `${y}-04-01`) return null; // 卒業後
+  for (const b of boundaries) {
+    if (today >= b.from) {
+      return { key: b.key, ...PHASES[b.key] };
+    }
+  }
+  return { key: 'early', ...PHASES.early };
+}
+
 // ─── Weekly planning ──────────────────────────────────────────────────────────
 
 export type PlanKind = 'busy' | 'work' | 'rest' | 'normal';
@@ -420,14 +493,27 @@ const TONE_ORDER: Record<AdviceTone, number> = { warning: 0, info: 1, good: 2 };
 /**
  * Rule-based advice combining the daily health records with the
  * job-hunting schedule. Returns at most `maxItems`, warnings first.
+ * phase を渡すと卒業年度ベースの時期アドバイスも含める。
  */
 export function buildSupportAdvice(
   condition: ConditionSummary,
   events: SupportEvent[],
   companies: SupportCompany[],
   maxItems = 5,
+  phase?: JobHuntPhase | null,
 ): SupportAdvice[] {
   const advice: SupportAdvice[] = [];
+
+  // 0. 就活フェーズ（卒業年度から算出）
+  if (phase) {
+    advice.push({
+      id: `phase-${phase.key}`,
+      tone: 'info',
+      icon: 'school',
+      title: `いまは${phase.label}です`,
+      message: phase.message,
+    });
+  }
 
   const overdue = events.filter(e => e.daysLeft < 0);
   const upcoming = events.filter(e => e.daysLeft >= 0);

@@ -14,6 +14,7 @@ import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import LineChart, { LinePoint } from '../components/charts/LineChart';
 import { fetchTotalRecordedDays, HealthRecord } from '../services/statsService';
+import { getGraduationYear } from '../services/profile';
 import {
   calculateJobSearchProgress,
   JOB_COMPANIES_STORAGE_KEY,
@@ -28,8 +29,11 @@ import {
   conditionLabel,
   conditionScoreOf,
   ConditionSummary,
+  currentJobHuntPhase,
   dateToString,
+  gradYearShortLabel,
   InterviewRetroItem,
+  JobHuntPhase,
   SupportAdvice,
   SupportCompany,
   SupportEvent,
@@ -104,21 +108,27 @@ export default function JobSupportScreen() {
   const [weekly, setWeekly] = useState<WeeklyPlan | null>(null);
   const [retro, setRetro] = useState<InterviewRetroItem[]>([]);
   const [chartPoints, setChartPoints] = useState<LinePoint[]>([]);
+  const [gradYear, setGradYear] = useState<number | null>(null);
+  const [phase, setPhase] = useState<JobHuntPhase | null>(null);
 
   const load = useCallback(async () => {
     if (!uid) return;
     const today = dateToString(new Date());
-    const [companies, records, totalDays] = await Promise.all([
+    const [companies, records, totalDays, graduationYear] = await Promise.all([
       loadCompanies(uid, isDemo).catch(() => [] as SupportCompany[]),
       loadRecentHealthRecords(uid, 30).catch(() => [] as HealthRecord[]),
       fetchTotalRecordedDays(uid),
+      getGraduationYear(),
     ]);
     // コンディションは直近7件、傾向分析・振り返りは30日分を使う
     const cond = computeConditionSummary(records.slice(-7), today, totalDays ?? records.length);
     const evts = collectUpcomingEvents(companies, today);
+    const currentPhase = graduationYear !== null ? currentJobHuntPhase(graduationYear, today) : null;
+    setGradYear(graduationYear);
+    setPhase(currentPhase);
     setCondition(cond);
     setEvents(evts);
-    setAdvice(buildSupportAdvice(cond, evts, companies));
+    setAdvice(buildSupportAdvice(cond, evts, companies, 5, currentPhase));
     setProgress(calculateJobSearchProgress(companies));
     setWeekly(buildWeeklyPlan(records, evts, today));
     setRetro(buildInterviewRetrospective(companies, records, today));
@@ -162,6 +172,14 @@ export default function JobSupportScreen() {
       <View style={s.header}>
         <Text style={s.title}>就活サポート</Text>
         <Text style={s.subtitle}>体調と就活予定から、今日のおすすめをお届けします</Text>
+        {gradYear !== null && phase && (
+          <View style={s.phaseChip}>
+            <MaterialIcons name="school" size={13} color={C.primary} />
+            <Text style={s.phaseChipText}>
+              {gradYearShortLabel(gradYear)}・{phase.label}
+            </Text>
+          </View>
+        )}
       </View>
 
       {/* 今日のコンディション */}
@@ -411,6 +429,18 @@ const s = StyleSheet.create({
   header: { marginTop: 8, marginBottom: 4 },
   title: { fontSize: 24, fontWeight: 'bold', color: '#263238' },
   subtitle: { fontSize: 13, color: C.sub, marginTop: 4 },
+  phaseChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+    backgroundColor: '#EBF0F8',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginTop: 8,
+  },
+  phaseChipText: { fontSize: 12, color: C.primary, fontWeight: 'bold' },
   sectionTitle: { fontSize: 13, fontWeight: 'bold', color: C.sub, marginTop: 20, marginBottom: 8 },
   card: {
     backgroundColor: C.card,

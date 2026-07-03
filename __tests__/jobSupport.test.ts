@@ -6,7 +6,9 @@ import {
   collectUpcomingEvents,
   computeConditionSummary,
   conditionScoreOf,
+  currentJobHuntPhase,
   dateToString,
+  gradYearShortLabel,
   scoreMental,
   scoreStamina,
   SupportCompany,
@@ -253,6 +255,32 @@ describe('buildInterviewRetrospective', () => {
     ];
     const items = buildInterviewRetrospective(companies, [], TODAY);
     expect(items.map(i => i.companyName)).toEqual(['A社', 'B社']);
+  });
+});
+
+describe('currentJobHuntPhase / gradYearShortLabel', () => {
+  it('27卒の標準スケジュールを判定する', () => {
+    expect(currentJobHuntPhase(2027, '2025-05-01')?.key).toBe('early');
+    expect(currentJobHuntPhase(2027, '2025-06-01')?.key).toBe('summer_intern');
+    expect(currentJobHuntPhase(2027, '2025-10-01')?.key).toBe('autumn_winter');
+    expect(currentJobHuntPhase(2027, '2026-03-01')?.key).toBe('entry_rush');
+    expect(currentJobHuntPhase(2027, '2026-06-01')?.key).toBe('selection');
+    expect(currentJobHuntPhase(2027, '2026-10-01')?.key).toBe('offer_period');
+    expect(currentJobHuntPhase(2027, '2027-03-31')?.key).toBe('offer_period');
+    expect(currentJobHuntPhase(2027, '2027-04-01')).toBeNull(); // 卒業後
+  });
+
+  it('短縮表記を返す', () => {
+    expect(gradYearShortLabel(2027)).toBe('27卒');
+    expect(gradYearShortLabel(2030)).toBe('30卒');
+  });
+
+  it('フェーズを渡すとアドバイスに含まれる', () => {
+    const condition = computeConditionSummary([], TODAY);
+    const phase = currentJobHuntPhase(2028, TODAY); // 2026-07-03 → サマーインターン期
+    expect(phase?.key).toBe('summer_intern');
+    const advice = buildSupportAdvice(condition, [], [], 10, phase);
+    expect(advice.some(a => a.id === 'phase-summer_intern')).toBe(true);
   });
 });
 
