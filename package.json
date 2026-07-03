@@ -14,7 +14,6 @@
     "@kingstinct/react-native-healthkit": "^14.0.0",
     "@notifee/react-native": "^9.1.8",
     "@react-native-async-storage/async-storage": "^3.0.2",
-    "@react-native-camera-roll/camera-roll": "^7.10.2",
     "@react-native-clipboard/clipboard": "^1.16.3",
     "@react-native-community/datetimepicker": "^9.1.0",
     "@react-native-vector-icons/material-icons": "^13.1.0",
@@ -24,8 +23,7 @@
     "react-native": "0.85.1",
     "react-native-nitro-modules": "^0.35.0",
     "react-native-safe-area-context": "^5.5.2",
-    "react-native-svg": "^15.15.4",
-    "react-native-view-shot": "^4.0.3"
+    "react-native-svg": "^15.15.4"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

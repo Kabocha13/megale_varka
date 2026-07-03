@@ -8,12 +8,11 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { ChatIcon, HealthManagementIcon,HomeIcon, SettingsIcon, WorkIcon } from './components/NavIcons';
+import { ChatIcon, HomeIcon, SettingsIcon, WorkIcon } from './components/NavIcons';
 import SplashScreen from './components/SplashScreen';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
 import HealthCareScreen from './screens/HealthCareScreen';
-import HealthManagementScreen from './screens/HealthManagementScreen';
 import JobManagementScreen from './screens/JobManagementScreen';
 import JobSupportScreen from './screens/JobSupportScreen';
 import LoginScreen from './screens/LoginScreen';

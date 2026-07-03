@@ -7,10 +7,6 @@ export function HomeIcon({ color, size }: Props) {
   return <MaterialIcons name="home" color={color} size={size} />;
 }
 
-export function HealthManagementIcon({ color, size }: Props) {
-  return <MaterialIcons name="local-hospital" color={color} size={size} />;
-}
-
 export function WorkIcon({ color, size }: Props) {
   return <MaterialIcons name="work" color={color} size={size} />;
 }
