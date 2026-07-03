@@ -1670,6 +1670,7 @@ interface CompanyDetailScreenProps {
   company: Company;
   isNew: boolean;
   globalFields: GlobalField[];
+  listResetKey?: number;
   onUpdateGlobalFields: (fields: GlobalField[]) => void;
   onSave: (c: Company) => void;
   onDelete: () => void;
@@ -1677,18 +1678,19 @@ interface CompanyDetailScreenProps {
   onBack: () => void;
 }
 
-function CompanyDetailScreen({ company, isNew, globalFields, onUpdateGlobalFields, onSave, onDelete, onNavigateToES, onBack }: CompanyDetailScreenProps) {
+function CompanyDetailScreen({ company, isNew, globalFields, listResetKey = 0, onUpdateGlobalFields, onSave, onDelete, onNavigateToES, onBack }: CompanyDetailScreenProps) {
   const [form, setForm] = useState<Company>(company);
   const [picker, setPicker] = useState<'goal' | 'desire' | 'status' | null>(null);
   const [showGlobalFieldsModal, setShowGlobalFieldsModal] = useState(false);
   const originalRef = useRef(JSON.stringify(company));
+  const listResetKeyRef = useRef(listResetKey);
 
   const set = <K extends keyof Company>(key: K, value: Company[K]) =>
     setForm(f => ({ ...f, [key]: value }));
 
-  const isDirty = () => JSON.stringify(form) !== originalRef.current;
+  const isDirty = useCallback(() => JSON.stringify(form) !== originalRef.current, [form]);
 
-  const handleBack = () => {
+  const handleBack = useCallback(() => {
     if (isDirty()) {
       Alert.alert('変更を破棄しますか？', '保存されていない変更は失われます。', [
         { text: '続けて編集', style: 'cancel' },
@@ -1697,7 +1699,13 @@ function CompanyDetailScreen({ company, isNew, globalFields, onUpdateGlobalField
     } else {
       onBack();
     }
-  };
+  }, [isDirty, onBack]);
+
+  useEffect(() => {
+    if (listResetKeyRef.current === listResetKey) { return; }
+    listResetKeyRef.current = listResetKey;
+    handleBack();
+  }, [listResetKey, handleBack]);
 
   const handleSave = () => {
     if (!form.name.trim()) {
@@ -2279,28 +2287,41 @@ interface ESEditScreenProps {
   es: ESItem;
   isNew: boolean;
   companyName: string;
+  listResetKey?: number;
   onSave: (es: ESItem) => void;
   onDelete: () => void;
   onBack: () => void;
+  onListReset?: () => void;
 }
 
-function ESEditScreen({ es, isNew, companyName, onSave, onDelete, onBack }: ESEditScreenProps) {
+function ESEditScreen({ es, isNew, companyName, listResetKey = 0, onSave, onDelete, onBack, onListReset }: ESEditScreenProps) {
   const [form, setForm] = useState<ESItem>(es);
   const [showStatusPicker, setShowStatusPicker] = useState(false);
   const originalRef = useRef(JSON.stringify(es));
+  const listResetKeyRef = useRef(listResetKey);
 
-  const isDirty = () => JSON.stringify(form) !== originalRef.current;
+  const isDirty = useCallback(() => JSON.stringify(form) !== originalRef.current, [form]);
 
-  const handleBack = () => {
+  const confirmLeave = useCallback((next: () => void) => {
     if (isDirty()) {
       Alert.alert('変更を破棄しますか？', '保存されていない変更は失われます。', [
         { text: '続けて編集', style: 'cancel' },
-        { text: '破棄して戻る', style: 'destructive', onPress: onBack },
+        { text: '破棄して戻る', style: 'destructive', onPress: next },
       ]);
     } else {
-      onBack();
+      next();
     }
-  };
+  }, [isDirty]);
+
+  const handleBack = useCallback(() => {
+    confirmLeave(onBack);
+  }, [confirmLeave, onBack]);
+
+  useEffect(() => {
+    if (listResetKeyRef.current === listResetKey) { return; }
+    listResetKeyRef.current = listResetKey;
+    confirmLeave(onListReset ?? onBack);
+  }, [listResetKey, confirmLeave, onBack, onListReset]);
 
   const handleSave = () => {
     const updated: ESItem = { ...form, updatedAt: nowISO() };
@@ -2496,12 +2517,17 @@ type ViewState =
   | { mode: 'new'; draft: Company }
   | { mode: 'es'; companyId: string; draft: ESItem };
 
-function JobManagementScreen() {
+interface JobManagementScreenProps {
+  listResetKey?: number;
+}
+
+function JobManagementScreen({ listResetKey = 0 }: JobManagementScreenProps) {
   const { uid, isDemo } = useAuth();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [globalFields, setGlobalFields] = useState<GlobalField[]>([]);
   const [view, setView] = useState<ViewState>({ mode: 'list' });
   const viewRef = useRef(view);
+  const listResetKeyRef = useRef(listResetKey);
   viewRef.current = view;
 
   // タスク通知をスケジュール
@@ -2604,6 +2630,14 @@ function JobManagementScreen() {
     }
   }, [uid, isDemo, syncNotifications]);
 
+  useEffect(() => {
+    if (listResetKeyRef.current === listResetKey) { return; }
+    listResetKeyRef.current = listResetKey;
+    if (viewRef.current.mode === 'view') {
+      setView({ mode: 'list' });
+    }
+  }, [listResetKey]);
+
   // 企業を保存（追加・更新）
   const saveCompany = useCallback((company: Company) => {
     const existingCompany = companies.find(c => c.id === company.id);
@@ -2668,6 +2702,7 @@ function JobManagementScreen() {
         es={view.draft}
         isNew={!company.entrySheet}
         companyName={company.name}
+        listResetKey={listResetKey}
         onSave={(updated) => {
           saveCompany({ ...company, entrySheet: updated });
         }}
@@ -2675,6 +2710,7 @@ function JobManagementScreen() {
           saveCompany({ ...company, entrySheet: null });
         }}
         onBack={() => setView({ mode: 'view', companyId: view.companyId })}
+        onListReset={() => setView({ mode: 'list' })}
       />
     );
   }
@@ -2709,6 +2745,7 @@ function JobManagementScreen() {
         company={view.draft}
         isNew
         globalFields={globalFields}
+        listResetKey={listResetKey}
         onUpdateGlobalFields={persistGlobalFields}
         onSave={saveCompany}
         onDelete={() => {/* ドラフトはまだ未保存のため削除不要 */}}
@@ -2725,6 +2762,7 @@ function JobManagementScreen() {
         company={company}
         isNew={false}
         globalFields={globalFields}
+        listResetKey={listResetKey}
         onUpdateGlobalFields={persistGlobalFields}
         onSave={saveCompany}
         onDelete={() => removeCompany(view.companyId, company.tasks)}

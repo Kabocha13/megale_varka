@@ -47,7 +47,10 @@ const STREAK_CACHE_KEY = '@health_stats_cache_v1';
 
 // --- Helpers ---
 function todayString(): string {
-  const d = new Date();
+  return dateToString(new Date());
+}
+
+function dateToString(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
@@ -64,9 +67,26 @@ function prevDate(dateStr: string): string {
   return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
 }
 
+function addDays(dateStr: string, offset: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + offset);
+  return dateToString(dt);
+}
+
 function avg(nums: number[]): number | null {
   if (!nums.length) { return null; }
   return nums.reduce((a, b) => a + b, 0) / nums.length;
+}
+
+export function filterRecordsToCalendarWindow(
+  records: HealthRecord[],
+  days: number,
+  today = todayString(),
+): HealthRecord[] {
+  const safeDays = Math.max(1, Math.floor(days));
+  const start = addDays(today, -(safeDays - 1));
+  return records.filter(r => r.date >= start && r.date <= today);
 }
 
 // --- Core ---
@@ -90,7 +110,7 @@ export function computeStreak(recordDates: Set<string>): number {
 
 export async function fetchHealthStats(uid: string, days = 30): Promise<HealthStats> {
   // Firestore: users/{uid}/healthRecords — doc id is the date string (YYYY-MM-DD),
-  // so ordering by __name__ desc gives us the most recent records first.
+  // and each record also stores the same value in `date`.
   const q = query(
     collection(db, 'users', uid, 'healthRecords'),
     orderBy('date', 'desc'),
@@ -102,23 +122,24 @@ export async function fetchHealthStats(uid: string, days = 30): Promise<HealthSt
 
   // chronological order (oldest first) for charts
   records.reverse();
+  const windowRecords = filterRecordsToCalendarWindow(records, days);
 
   // Streak only counts records made on the actual day (not retroactive).
   const onTimeDates = new Set(
-    records.filter(r => r.isRetroactive !== true).map(r => r.date),
+    windowRecords.filter(r => r.isRetroactive !== true).map(r => r.date),
   );
   const streak = computeStreak(onTimeDates);
 
-  const last7 = records.slice(-7);
+  const last7 = windowRecords.slice(-7);
 
   const moods = last7.map(r => r.mood).filter((x): x is number => typeof x === 'number');
   const sleeps = last7.map(r => r.sleepHours).filter((x): x is number => typeof x === 'number' && x > 0);
 
-  const totalAlcoholDays = records.filter(r => r.alcohol === true).length;
+  const totalAlcoholDays = windowRecords.filter(r => r.alcohol === true).length;
 
   // Symptom frequency across entire window
   const symMap = new Map<string, number>();
-  records.forEach(r => {
+  windowRecords.forEach(r => {
     (r.symptoms ?? []).forEach(s => {
       symMap.set(s, (symMap.get(s) ?? 0) + 1);
     });
@@ -130,21 +151,21 @@ export async function fetchHealthStats(uid: string, days = 30): Promise<HealthSt
   const appetiteCounts: Record<AppetiteValue, number> = {
     nothing: 0, water: 0, noodles: 0, set_meal: 0, steak: 0,
   };
-  records.forEach(r => {
+  windowRecords.forEach(r => {
     if (r.appetite && appetiteCounts[r.appetite] !== undefined) {
       appetiteCounts[r.appetite] += 1;
     }
   });
 
-  const stepsArr = records
+  const stepsArr = windowRecords
     .map(r => r.steps)
     .filter((x): x is number => typeof x === 'number' && x > 0);
-  const calsArr = records
+  const calsArr = windowRecords
     .map(r => r.activeCalories)
     .filter((x): x is number => typeof x === 'number' && x > 0);
 
   const stats: HealthStats = {
-    records,
+    records: windowRecords,
     streak,
     avgMood: avg(moods),
     avgSleepHours: avg(sleeps),

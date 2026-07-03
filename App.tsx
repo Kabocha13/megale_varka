@@ -42,10 +42,10 @@ function TabIcon({ name, active }: { name: TabName; active: boolean }) {
 
 const TABS: TabName[] = ['health_care', 'job_management', 'job_support', 'settings'];
 
-function renderScreen(tab: TabName) {
+function renderScreen(tab: TabName, jobManagementListResetKey: number) {
   switch (tab) {
     case 'health_care':    return <HealthCareScreen />;
-    case 'job_management': return <JobManagementScreen />;
+    case 'job_management': return <JobManagementScreen listResetKey={jobManagementListResetKey} />;
     case 'job_support':    return <JobSupportScreen />;
     case 'settings':       return <SettingsScreen />;
     default:              return null;
@@ -77,7 +77,15 @@ const demoBannerStyles = StyleSheet.create({
 function AppContent() {
   const { isAuthenticated, isLoading, isDemo } = useAuth();
   const [activeTab, setActiveTab] = useState<TabName>('health_care');
+  const [jobManagementListResetKey, setJobManagementListResetKey] = useState(0);
   const [authScreen, setAuthScreen] = useState<AuthScreen>('login');
+
+  const handleTabPress = (tab: TabName) => {
+    if (tab === 'job_management' && tab === activeTab) {
+      setJobManagementListResetKey(k => k + 1);
+    }
+    setActiveTab(tab);
+  };
 
   if (isLoading) {
     return (
@@ -111,14 +119,14 @@ function AppContent() {
       <StatusBar barStyle="dark-content" />
       {isDemo && <DemoBanner />}
       <View style={styles.content}>
-        {renderScreen(activeTab)}
+        {renderScreen(activeTab, jobManagementListResetKey)}
       </View>
       <View style={styles.tabBar}>
         {TABS.map(tab => (
           <TouchableOpacity
             key={tab}
             style={styles.tabItem}
-            onPress={() => setActiveTab(tab)}
+            onPress={() => handleTabPress(tab)}
             accessible={true}
             accessibilityRole="tab"
             accessibilityLabel={
