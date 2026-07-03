@@ -1,6 +1,6 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { initializeApp } from 'firebase/app';
-import { getReactNativePersistence, initializeAuth } from 'firebase/auth';
+import { createAsyncStorage } from '@react-native-async-storage/async-storage';
+import { getApp, getApps, initializeApp } from 'firebase/app';
+import { getAuth, getReactNativePersistence, initializeAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import {
   FIREBASE_API_KEY,
@@ -22,11 +22,22 @@ const firebaseConfig = {
   appId: FIREBASE_APP_ID,
 };
 
-export const app = initializeApp(firebaseConfig);
+export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
 // AsyncStorage を使って認証状態をデバイスに永続化する
-export const auth = initializeAuth(app, {
-  persistence: getReactNativePersistence(AsyncStorage),
-});
+function initializeFirebaseAuth() {
+  try {
+    return initializeAuth(app, {
+      persistence: getReactNativePersistence(createAsyncStorage('auth')),
+    });
+  } catch (error: unknown) {
+    if ((error as { code?: string }).code === 'auth/already-initialized') {
+      return getAuth(app);
+    }
+    throw error;
+  }
+}
+
+export const auth = initializeFirebaseAuth();
 
 export const db = getFirestore(app);

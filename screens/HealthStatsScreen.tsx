@@ -11,8 +11,6 @@ import MaterialIcons from '@react-native-vector-icons/material-icons';
 import LineChart, { LinePoint } from '../components/charts/LineChart';
 import HorizontalBarChart from '../components/charts/HorizontalBarChart';
 import StackedBar, { StackSegment } from '../components/charts/StackedBar';
-import { useAuth } from '../context/AuthContext';
-import { fetchJobSearchProgress } from '../services/jobSearchProgress';
 import { AppetiteValue, fetchHealthStats, HealthStats } from '../services/statsService';
 
 interface Props {
@@ -78,42 +76,8 @@ function avg(nums: number[]): number | null {
   return nums.reduce((sum, n) => sum + n, 0) / nums.length;
 }
 
-function clamp(n: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, n));
-}
-
-function calculateHealthScore(
-  records: HealthStats['records'],
-  days: number,
-  avgMood: number | null,
-  avgSleepHours: number | null,
-): number {
-  if (records.length === 0) { return 0; }
-
-  const recordScore = (records.length / days) * 100;
-  const moodScore = avgMood !== null ? ((avgMood - 1) / 4) * 100 : 50;
-  const sleepScore = avgSleepHours !== null
-    ? (1 - Math.min(Math.abs(avgSleepHours - 7.5) / 7.5, 1)) * 100
-    : 50;
-  const symptomScore = (
-    records.reduce((sum, record) => sum + (record.symptoms?.length ?? 0), 0) / days
-  );
-  const normalizedSymptomScore = clamp(100 - symptomScore * 25, 0, 100);
-  const noAlcoholScore = (records.filter(record => record.alcohol !== true).length / records.length) * 100;
-
-  return Math.round(
-    recordScore * 0.2
-    + moodScore * 0.3
-    + sleepScore * 0.25
-    + normalizedSymptomScore * 0.15
-    + noAlcoholScore * 0.1,
-  );
-}
-
 export default function HealthStatsScreen({ uid, onEdit }: Props) {
-  const { isDemo } = useAuth();
   const [stats, setStats] = useState<HealthStats | null>(null);
-  const [jobSearchScore, setJobSearchScore] = useState(0);
   const [loading, setLoading] = useState(true);
   const [windowDays, setWindowDays] = useState<7 | 30>(7);
 
@@ -122,20 +86,16 @@ export default function HealthStatsScreen({ uid, onEdit }: Props) {
     (async () => {
       setLoading(true);
       try {
-        const [s, jobProgress] = await Promise.all([
-          fetchHealthStats(uid, 30),
-          fetchJobSearchProgress(uid, isDemo),
-        ]);
+        const s = await fetchHealthStats(uid, 30);
         if (!cancelled) {
           setStats(s);
-          setJobSearchScore(jobProgress.score);
         }
       } finally {
         if (!cancelled) { setLoading(false); }
       }
     })();
     return () => { cancelled = true; };
-  }, [uid, isDemo]);
+  }, [uid]);
 
   if (loading || !stats) {
     return (
@@ -180,13 +140,6 @@ export default function HealthStatsScreen({ uid, onEdit }: Props) {
       .map(record => record.sleepHours)
       .filter((value): value is number => typeof value === 'number' && value > 0),
   );
-  const healthScore = calculateHealthScore(
-    recordsInWindow,
-    windowDays,
-    avgMoodInWindow,
-    avgSleepInWindow,
-  );
-  const overallScore = Math.round((healthScore + jobSearchScore) / 2);
   const symptomFrequencies = buildSymptomFrequencies(
     recordsInWindow,
     windowDays,
@@ -208,25 +161,6 @@ export default function HealthStatsScreen({ uid, onEdit }: Props) {
             <Text style={s.editBtnText}>記録を編集</Text>
           </TouchableOpacity>
         )}
-      </View>
-
-      {/* Summary */}
-      <View style={s.summaryRow}>
-        <View style={[s.summaryCard, s.streakCard]}>
-          <MaterialIcons name="analytics" size={24} color={C.primary} style={s.summaryIcon} />
-          <Text style={s.summaryValue}>{overallScore}</Text>
-          <Text style={s.summaryLabel}>総合スコア</Text>
-        </View>
-        <View style={s.summaryCard}>
-          <MaterialIcons name="health-and-safety" size={24} color="#4F8F6B" style={s.summaryIcon} />
-          <Text style={s.summaryValue}>{healthScore}</Text>
-          <Text style={s.summaryLabel}>健康スコア</Text>
-        </View>
-        <View style={s.summaryCard}>
-          <MaterialIcons name="business-center" size={24} color="#7C6A4A" style={s.summaryIcon} />
-          <Text style={s.summaryValue}>{jobSearchScore}</Text>
-          <Text style={s.summaryLabel}>就活経験値</Text>
-        </View>
       </View>
 
       {/* Window switcher */}
@@ -385,21 +319,6 @@ const s = StyleSheet.create({
     backgroundColor: C.selected,
   },
   editBtnText: { fontSize: 12, color: C.primary, fontWeight: 'bold' },
-
-  summaryRow: { flexDirection: 'row', gap: 8, marginBottom: 4 },
-  summaryCard: {
-    flex: 1,
-    backgroundColor: C.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: C.border,
-    alignItems: 'center',
-    paddingVertical: 10,
-  },
-  streakCard: { backgroundColor: '#FFF6EC', borderColor: '#E8C9A0' },
-  summaryIcon: { marginBottom: 2 },
-  summaryValue: { fontSize: 22, fontWeight: 'bold', color: C.primary, marginTop: 2 },
-  summaryLabel: { fontSize: 10, color: C.sub, marginTop: 2 },
 
   tabRow: {
     flexDirection: 'row',

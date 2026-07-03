@@ -15,7 +15,6 @@ import {
 import { captureRef } from 'react-native-view-shot';
 import { useAuth } from '../context/AuthContext';
 import { CareerFitChatResponse, askCareerFitChat } from '../services/careerFitChat';
-import HealthManagementScreen from './HealthManagementScreen';
 
 type SupportView = 'home' | 'career_fit';
 type ChatRole = 'assistant' | 'user';
@@ -463,14 +462,6 @@ function JobSupportHome({ onOpenCareerFit }: { onOpenCareerFit: () => void }) {
       >
         <Text style={styles.featureTitle}>適職診断</Text>
       </TouchableOpacity>
-
-      <View style={styles.statusSection}>
-        <HealthManagementScreen showOnly="stats" />
-      </View>
-
-      <View style={styles.checklistSection}>
-        <HealthManagementScreen showOnly="missions" />
-      </View>
     </ScrollView>
   );
 }
@@ -518,13 +509,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: C.primary,
     textAlign: 'center',
-  },
-  statusSection: {
-    marginTop: 20,
-    marginBottom: 20,
-  },
-  checklistSection: {
-    marginTop: 20,
   },
   navBar: {
     flexDirection: 'row',
