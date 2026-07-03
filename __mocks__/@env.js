@@ -7,4 +7,5 @@ module.exports = {
   FIREBASE_APP_ID: '1:000000000:web:test',
   DEMO_MODE: 'false',
   GOOGLE_WEB_CLIENT_ID: 'test-web-client-id',
+  APPLE_SIGNIN_ENABLED: 'false',
 };

@@ -9,10 +9,13 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { DEMO_MODE } from '@env';
+import { APPLE_SIGNIN_ENABLED, DEMO_MODE } from '@env';
 import { useAuth } from '../context/AuthContext';
 
 const isDemoMode = DEMO_MODE === 'true';
+// Sign in with Apple は有料の Apple Developer Program が必要なため、
+// 加入して Xcode で capability を追加するまではフラグで無効化しておく
+const appleSignInEnabled = APPLE_SIGNIN_ENABLED === 'true';
 
 type Props = {
   onNavigateToRegister: () => void;
@@ -115,7 +118,7 @@ function LoginScreen({ onNavigateToRegister, onNavigateToForgotPassword }: Props
         <Text style={styles.googleButtonText}>Googleでログイン</Text>
       </TouchableOpacity>
 
-      {Platform.OS === 'ios' && (
+      {Platform.OS === 'ios' && appleSignInEnabled && (
         <TouchableOpacity
           style={[styles.socialButton, styles.appleButton, submitting && styles.socialButtonDisabled]}
           onPress={() => handleSocialLogin('apple')}

@@ -7,4 +7,5 @@ declare module '@env' {
   export const FIREBASE_APP_ID: string;
   export const DEMO_MODE: string;
   export const GOOGLE_WEB_CLIENT_ID: string;
+  export const APPLE_SIGNIN_ENABLED: string;
 }
