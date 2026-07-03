@@ -55,10 +55,25 @@ export interface ConditionSummary {
 
 export type AdviceTone = 'warning' | 'info' | 'good';
 
+// MaterialIcons のグリフ名（絵文字はプラットフォームで見た目が変わるため使わない）
+export type SupportAdviceIcon =
+  | 'celebration'
+  | 'alarm'
+  | 'bedtime'
+  | 'self-improvement'
+  | 'mic'
+  | 'assignment'
+  | 'favorite'
+  | 'edit'
+  | 'edit-note'
+  | 'local-fire-department'
+  | 'spa'
+  | 'business';
+
 export interface SupportAdvice {
   id: string;
   tone: AdviceTone;
-  icon: string;
+  icon: SupportAdviceIcon;
   title: string;
   message: string;
 }
@@ -433,7 +448,7 @@ export function buildSupportAdvice(
     advice.push({
       id: 'offer',
       tone: 'good',
-      icon: '🎉',
+      icon: 'celebration',
       title: '内定おめでとうございます！',
       message: 'ここまでの積み重ねが実を結びました。残りの選考も、体調を整えながら自分のペースで進めましょう。',
     });
@@ -445,7 +460,7 @@ export function buildSupportAdvice(
     advice.push({
       id: 'overdue',
       tone: 'warning',
-      icon: '⏰',
+      icon: 'alarm',
       title: `期限を過ぎたタスクが${overdue.length}件あります`,
       message: `「${first.companyName}：${first.title}」など。提出可能か企業マイページを確認し、不要なら完了にして整理しましょう。`,
     });
@@ -460,7 +475,7 @@ export function buildSupportAdvice(
       advice.push({
         id: 'interview-sleep',
         tone: 'warning',
-        icon: '😴',
+        icon: 'bedtime',
         title: '面接前は睡眠を最優先に',
         message: `${formatEventDate(nextInterview)}に「${nextInterview.companyName}：${nextInterview.title}」があります。直近の睡眠が6時間を下回っています。今夜は準備を早めに切り上げて、7時間以上の睡眠を確保しましょう。`,
       });
@@ -468,7 +483,7 @@ export function buildSupportAdvice(
       advice.push({
         id: 'interview-mental',
         tone: 'warning',
-        icon: '🧘',
+        icon: 'self-improvement',
         title: '面接前にメンタルを整えましょう',
         message: `${formatEventDate(nextInterview)}に「${nextInterview.companyName}：${nextInterview.title}」があります。メンタルスコアが低めです。ホームの「心の休養休息」チェックリストで小さなリフレッシュを挟みましょう。`,
       });
@@ -476,7 +491,7 @@ export function buildSupportAdvice(
       advice.push({
         id: 'interview-ready',
         tone: 'info',
-        icon: '🎤',
+        icon: 'mic',
         title: 'まもなく面接があります',
         message: `${formatEventDate(nextInterview)}に「${nextInterview.companyName}：${nextInterview.title}」。当日は体調記録を朝のうちに済ませて、コンディションを確認してから臨みましょう。`,
       });
@@ -488,7 +503,7 @@ export function buildSupportAdvice(
     advice.push({
       id: 'crunch',
       tone: lowCondition ? 'warning' : 'info',
-      icon: '📋',
+      icon: 'assignment',
       title: `今週は締切が${weekLoad.length}件集中しています`,
       message: lowCondition
         ? '体調スコアが低めの週に締切が重なっています。優先度の低いタスクは前倒し・辞退も検討し、無理のない計画に調整しましょう。'
@@ -501,7 +516,7 @@ export function buildSupportAdvice(
     advice.push({
       id: 'low-mood',
       tone: 'warning',
-      icon: '💙',
+      icon: 'favorite',
       title: '気分が下がり気味です',
       message: hasRejection
         ? '選考結果に気分が影響するのは自然なことです。休養も就活の一部。今日は「心の休養休息」を1つ実行して、予定は最小限にしましょう。'
@@ -524,7 +539,7 @@ export function buildSupportAdvice(
     advice.push({
       id: 'es-chance',
       tone: 'good',
-      icon: '✍️',
+      icon: 'edit',
       title: '調子が良い今日はES推敲のチャンス',
       message: `メンタルスコアが好調です。下書き中のES（${names}${draftEsCompanies.length > 2 ? ' ほか' : ''}）を見直すのに良いタイミングです。`,
     });
@@ -535,7 +550,7 @@ export function buildSupportAdvice(
     advice.push({
       id: 'record-today',
       tone: 'info',
-      icon: '📝',
+      icon: 'edit-note',
       title: '今日の体調をまだ記録していません',
       message: 'ホーム画面から今日の記録をつけると、コンディションに合わせた就活アドバイスが表示されます。',
     });
@@ -546,7 +561,7 @@ export function buildSupportAdvice(
     advice.push({
       id: 'streak',
       tone: 'good',
-      icon: '🔥',
+      icon: 'local-fire-department',
       title: `体調記録が${condition.streak}日連続です`,
       message: '記録の継続は自己管理力の証拠。面接で自己管理について聞かれたときのエピソードにもなります。',
     });
@@ -557,7 +572,7 @@ export function buildSupportAdvice(
     advice.push({
       id: 'no-events',
       tone: 'info',
-      icon: '🌱',
+      icon: 'spa',
       title: '直近2週間の締切はありません',
       message: '比較的余裕のある時期です。企業研究・ESのストック作成・生活リズムの立て直しに充てましょう。',
     });
@@ -568,7 +583,7 @@ export function buildSupportAdvice(
     advice.push({
       id: 'no-companies',
       tone: 'info',
-      icon: '🏢',
+      icon: 'business',
       title: '企業が登録されていません',
       message: '「求人管理」タブで志望企業を登録すると、締切や面接に合わせた体調アドバイスが表示されます。',
     });

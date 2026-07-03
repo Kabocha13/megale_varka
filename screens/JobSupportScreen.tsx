@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { collection, getDocs, limit, orderBy, query } from 'firebase/firestore';
+import MaterialIcons from '@react-native-vector-icons/material-icons';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import LineChart, { LinePoint } from '../components/charts/LineChart';
@@ -181,7 +182,10 @@ export default function JobSupportScreen() {
                 <Text style={s.condMeta}>直近平均睡眠 {condition.avgSleepHours.toFixed(1)}h</Text>
               )}
               {condition.streak > 0 && (
-                <Text style={s.condMeta}>記録 {condition.streak}日連続 🔥</Text>
+                <View style={s.condMetaRowItem}>
+                  <MaterialIcons name="local-fire-department" size={13} color={C.warning} />
+                  <Text style={s.condMeta}>記録 {condition.streak}日連続</Text>
+                </View>
               )}
             </View>
           </>
@@ -199,7 +203,7 @@ export default function JobSupportScreen() {
           const tone = TONE_STYLE[a.tone];
           return (
             <View key={a.id} style={[s.adviceCard, { borderLeftColor: tone.border, backgroundColor: tone.bg }]}>
-              <Text style={s.adviceIcon}>{a.icon}</Text>
+              <MaterialIcons name={a.icon} size={20} color={tone.border} style={s.adviceIcon} />
               <View style={s.adviceBody}>
                 <Text style={s.adviceTitle}>{a.title}</Text>
                 <Text style={s.adviceMessage}>{a.message}</Text>
@@ -226,17 +230,30 @@ export default function JobSupportScreen() {
                   <View key={day.date} style={[s.dayChip, kindStyle]}>
                     <Text style={s.dayChipWeekday}>{WEEKDAY_CHARS[day.weekday]}</Text>
                     <Text style={s.dayChipDate}>{dd}</Text>
-                    <Text style={s.dayChipMark}>
-                      {day.hasInterview ? '🎤' : day.eventCount > 0 ? `${day.eventCount}件` : day.kind === 'work' ? '◎' : day.kind === 'rest' ? '休' : '　'}
-                    </Text>
+                    {day.hasInterview ? (
+                      <MaterialIcons name="mic" size={12} color={C.warning} />
+                    ) : (
+                      <Text style={s.dayChipMark}>
+                        {day.eventCount > 0 ? `${day.eventCount}件` : day.kind === 'work' ? '◎' : day.kind === 'rest' ? '休' : '　'}
+                      </Text>
+                    )}
                   </View>
                 );
               })}
             </View>
             <View style={s.weekLegend}>
-              <Text style={s.weekLegendItem}><Text style={{ color: C.warning }}>■</Text> 予定あり</Text>
-              <Text style={s.weekLegendItem}><Text style={{ color: C.success }}>■</Text> 作業おすすめ</Text>
-              <Text style={s.weekLegendItem}><Text style={{ color: C.muted }}>■</Text> 休息推奨</Text>
+              <View style={s.weekLegendRow}>
+                <View style={[s.weekLegendSwatch, { backgroundColor: C.warning }]} />
+                <Text style={s.weekLegendItem}>予定あり</Text>
+              </View>
+              <View style={s.weekLegendRow}>
+                <View style={[s.weekLegendSwatch, { backgroundColor: C.success }]} />
+                <Text style={s.weekLegendItem}>作業おすすめ</Text>
+              </View>
+              <View style={s.weekLegendRow}>
+                <View style={[s.weekLegendSwatch, { backgroundColor: C.muted }]} />
+                <Text style={s.weekLegendItem}>休息推奨</Text>
+              </View>
             </View>
             {weekly.recommendedDate ? (
               <Text style={s.weekNote}>
@@ -267,9 +284,12 @@ export default function JobSupportScreen() {
                 </Text>
               </View>
               <View style={s.eventBody}>
-                <Text style={s.eventTitle} numberOfLines={1}>
-                  {e.isInterview ? '🎤 ' : ''}{e.title}
-                </Text>
+                <View style={s.eventTitleRow}>
+                  {e.isInterview && (
+                    <MaterialIcons name="mic" size={14} color={C.primary} style={s.eventTitleIcon} />
+                  )}
+                  <Text style={s.eventTitle} numberOfLines={1}>{e.title}</Text>
+                </View>
                 <Text style={s.eventMeta} numberOfLines={1}>
                   {e.companyName}　{e.date.replace(/^\d{4}-0?(\d+)-0?(\d+)$/, '$1/$2')}{e.time ? ` ${e.time}` : ''}
                 </Text>
@@ -389,6 +409,7 @@ const s = StyleSheet.create({
   gaugeTrack: { height: 10, backgroundColor: '#EEE', borderRadius: 5, overflow: 'hidden' },
   gaugeBar: { height: '100%', borderRadius: 5 },
   condMetaRow: { flexDirection: 'row', gap: 16, marginTop: 2 },
+  condMetaRowItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   condMeta: { fontSize: 12, color: C.sub },
   adviceCard: {
     flexDirection: 'row',
@@ -400,7 +421,7 @@ const s = StyleSheet.create({
     marginBottom: 8,
     gap: 10,
   },
-  adviceIcon: { fontSize: 20, marginTop: 1 },
+  adviceIcon: { marginTop: 1 },
   adviceBody: { flex: 1 },
   adviceTitle: { fontSize: 14, fontWeight: 'bold', color: C.text, marginBottom: 4 },
   adviceMessage: { fontSize: 13, color: C.sub, lineHeight: 19 },
@@ -425,7 +446,9 @@ const s = StyleSheet.create({
   dayBadgeOverdue: { backgroundColor: C.danger },
   dayBadgeText: { color: '#FFF', fontSize: 12, fontWeight: 'bold' },
   eventBody: { flex: 1 },
-  eventTitle: { fontSize: 14, color: C.text, fontWeight: '500' },
+  eventTitleRow: { flexDirection: 'row', alignItems: 'center' },
+  eventTitleIcon: { marginRight: 4 },
+  eventTitle: { flexShrink: 1, fontSize: 14, color: C.text, fontWeight: '500' },
   eventMeta: { fontSize: 12, color: C.sub, marginTop: 2 },
   progressHeader: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 8 },
   progressScore: { fontSize: 32, fontWeight: 'bold', color: C.primary },
@@ -450,6 +473,8 @@ const s = StyleSheet.create({
   dayChipDate: { fontSize: 15, fontWeight: 'bold', color: C.text, marginVertical: 2 },
   dayChipMark: { fontSize: 10, color: C.sub },
   weekLegend: { flexDirection: 'row', gap: 12, marginTop: 10 },
+  weekLegendRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  weekLegendSwatch: { width: 10, height: 10, borderRadius: 2 },
   weekLegendItem: { fontSize: 11, color: C.sub },
   weekNote: { fontSize: 12, color: C.sub, marginTop: 8, lineHeight: 18 },
   chartCaption: { fontSize: 12, color: C.sub, marginBottom: 8 },

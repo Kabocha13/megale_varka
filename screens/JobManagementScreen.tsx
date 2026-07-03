@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Clipboard from '@react-native-clipboard/clipboard';
+import MaterialIcons from '@react-native-vector-icons/material-icons';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -603,7 +604,7 @@ function DatePickerField({
         <Text style={value ? pfS2.btnText : pfS2.btnPlaceholder}>
           {value ? displayDate(value) : '日付を選択'}
         </Text>
-        <Text style={pfS2.icon}>📅</Text>
+        <MaterialIcons name="event" size={18} color="#5A7696" />
       </TouchableOpacity>
 
       {Platform.OS === 'android' && show && (
@@ -653,7 +654,7 @@ function TimePickerField({
         accessibilityValue={{ text: value || '23:59' }}
       >
         <Text style={pfS2.btnText}>{value || '23:59'}</Text>
-        <Text style={pfS2.icon}>🕐</Text>
+        <MaterialIcons name="schedule" size={18} color="#5A7696" />
       </TouchableOpacity>
 
       {Platform.OS === 'android' && show && (
@@ -689,7 +690,6 @@ const pfS2 = StyleSheet.create({
   },
   btnText: { fontSize: 14, color: '#333333' },
   btnPlaceholder: { fontSize: 14, color: '#A8BDD4' },
-  icon: { fontSize: 16 },
 });
 
 // ─── TaskItem ─────────────────────────────────────────────────────────────────
@@ -1423,7 +1423,7 @@ function CompanyListScreen({ companies, onSelect, onEdit, onAdd }: CompanyListSc
             onPress={() => setShowFilter(true)}
             accessibilityLabel="検索・絞り込み"
           >
-            <Text style={lS.iconBtnText}>🔍</Text>
+            <MaterialIcons name="search" size={20} color={C.primary} />
             {isFiltered && <View style={lS.filterDot} />}
           </TouchableOpacity>
           <TouchableOpacity style={lS.addBtn} onPress={onAdd} accessibilityLabel="企業を追加">
@@ -1504,8 +1504,9 @@ function CompanyListScreen({ companies, onSelect, onEdit, onAdd }: CompanyListSc
 
               {!!item.nextInterviewDate && item.nextInterviewDate >= formatDate(new Date()) && (
                 <View style={lS.interviewChip}>
+                  <MaterialIcons name="mic" size={13} color={C.primary} />
                   <Text style={lS.interviewChipText}>
-                    🎤 面接 {displayDate(item.nextInterviewDate)}{item.nextInterviewTime ? ` ${item.nextInterviewTime}` : ''}
+                    面接 {displayDate(item.nextInterviewDate)}{item.nextInterviewTime ? ` ${item.nextInterviewTime}` : ''}
                   </Text>
                 </View>
               )}
@@ -1554,7 +1555,6 @@ const lS = StyleSheet.create({
     borderColor: C.border,
   },
   iconBtnActive: { borderColor: C.primary, backgroundColor: '#EBF0F8' },
-  iconBtnText: { fontSize: 18 },
   filterDot: {
     position: 'absolute',
     top: 4,
@@ -1631,6 +1631,9 @@ const lS = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   interviewChipText: { color: C.primary, fontSize: 12, fontWeight: 'bold' },
   empty: { alignItems: 'center', paddingTop: 72 },
