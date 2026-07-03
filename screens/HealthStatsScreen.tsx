@@ -168,7 +168,7 @@ export default function HealthStatsScreen({ uid, onEdit }: Props) {
           <Text style={s.title}>健康統計</Text>
           <View style={s.streakBadge}>
             <MaterialIcons name="local-fire-department" size={21} color="#E36F2C" />
-            <Text style={s.streakText}>継続記録 {stats.streak}日</Text>
+            <Text style={s.streakText}>記録 {stats.totalDays}日</Text>
           </View>
         </View>
         {onEdit && (

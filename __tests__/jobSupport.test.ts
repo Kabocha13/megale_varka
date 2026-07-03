@@ -123,10 +123,10 @@ describe('computeConditionSummary', () => {
     expect(c.stamina).toBeNull();
     expect(c.mental).toBeNull();
     expect(c.recordedToday).toBe(false);
-    expect(c.streak).toBe(0);
+    expect(c.totalRecordedDays).toBe(0);
   });
 
-  it('今日の記録と傾向・連続日数を検出する', () => {
+  it('今日の記録と傾向を検出する', () => {
     const records: HealthRecord[] = [
       record({ date: daysFromToday(-2), sleepHours: 5, mood: 2 }),
       record({ date: daysFromToday(-1), sleepHours: 5.5, mood: 2 }),
@@ -136,17 +136,18 @@ describe('computeConditionSummary', () => {
     expect(c.recordedToday).toBe(true);
     expect(c.shortSleepTrend).toBe(true);
     expect(c.lowMoodTrend).toBe(true);
-    expect(c.streak).toBe(3);
     expect(c.lastSleepHours).toBe(5);
   });
 
-  it('遡り記録はストリークに数えない', () => {
+  it('累計記録日数は連続が途切れても減らず、指定があればそれを使う', () => {
     const records: HealthRecord[] = [
-      record({ date: daysFromToday(-1), isRetroactive: true }),
+      record({ date: daysFromToday(-5), isRetroactive: true }), // 間が空いていても
       record({ date: TODAY }),
     ];
-    const c = computeConditionSummary(records, TODAY);
-    expect(c.streak).toBe(1);
+    // 未指定ならウィンドウ内の記録数にフォールバック
+    expect(computeConditionSummary(records, TODAY).totalRecordedDays).toBe(2);
+    // 生涯累計（集計クエリの結果）が渡されればそれを使う
+    expect(computeConditionSummary(records, TODAY, 42).totalRecordedDays).toBe(42);
   });
 });
 
@@ -166,15 +167,28 @@ describe('buildWeeklyPlan', () => {
     record({ date: '2026-06-29', ...GOOD_DAY }),
   ];
 
-  it('予定のある日は busy になる', () => {
+  it('締切はその日の予定（busy）にせず、締切マーカーとして数える', () => {
     const companies: SupportCompany[] = [
       { id: 'a', name: 'A社', tasks: [{ id: 't', title: 'ES提出', deadline: daysFromToday(1), completed: false }] },
     ];
     const events = collectUpcomingEvents(companies, TODAY);
     const plan = buildWeeklyPlan(records, events, TODAY);
     expect(plan.days).toHaveLength(7);
+    expect(plan.days[1].kind).not.toBe('busy');
+    expect(plan.days[1].deadlineCount).toBe(1);
+    expect(plan.days[1].interviewCount).toBe(0);
+    expect(plan.weekDeadlineCount).toBe(1);
+  });
+
+  it('面接のある日は busy になる', () => {
+    const companies: SupportCompany[] = [
+      { id: 'a', name: 'A社', tasks: [{ id: 't', title: '一次面接', deadline: daysFromToday(1), completed: false }] },
+    ];
+    const events = collectUpcomingEvents(companies, TODAY);
+    const plan = buildWeeklyPlan(records, events, TODAY);
     expect(plan.days[1].kind).toBe('busy');
-    expect(plan.days[1].eventCount).toBe(1);
+    expect(plan.days[1].interviewCount).toBe(1);
+    expect(plan.days[1].deadlineCount).toBe(0);
   });
 
   it('曜日傾向から作業おすすめ日・休息日を判定し、おすすめ日を返す', () => {

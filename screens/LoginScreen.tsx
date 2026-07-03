@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   StyleSheet,
   Text,
   TextInput,
@@ -19,7 +20,7 @@ type Props = {
 };
 
 function LoginScreen({ onNavigateToRegister, onNavigateToForgotPassword }: Props) {
-  const { login } = useAuth();
+  const { login, loginWithGoogle, loginWithApple } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -32,6 +33,21 @@ function LoginScreen({ onNavigateToRegister, onNavigateToForgotPassword }: Props
     setSubmitting(true);
     try {
       await login(email, password);
+    } catch (error: unknown) {
+      Alert.alert('エラー', (error as Error).message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleSocialLogin(provider: 'google' | 'apple') {
+    setSubmitting(true);
+    try {
+      if (provider === 'google') {
+        await loginWithGoogle();
+      } else {
+        await loginWithApple();
+      }
     } catch (error: unknown) {
       Alert.alert('エラー', (error as Error).message);
     } finally {
@@ -82,6 +98,34 @@ function LoginScreen({ onNavigateToRegister, onNavigateToForgotPassword }: Props
           <Text style={styles.buttonText}>ログイン</Text>
         )}
       </TouchableOpacity>
+
+      <View style={styles.socialDividerRow}>
+        <View style={styles.socialDividerLine} />
+        <Text style={styles.socialDividerText}>または</Text>
+        <View style={styles.socialDividerLine} />
+      </View>
+
+      <TouchableOpacity
+        style={[styles.socialButton, styles.googleButton, submitting && styles.socialButtonDisabled]}
+        onPress={() => handleSocialLogin('google')}
+        disabled={submitting}
+        accessibilityRole="button"
+        accessibilityLabel="Googleでログイン"
+      >
+        <Text style={styles.googleButtonText}>Googleでログイン</Text>
+      </TouchableOpacity>
+
+      {Platform.OS === 'ios' && (
+        <TouchableOpacity
+          style={[styles.socialButton, styles.appleButton, submitting && styles.socialButtonDisabled]}
+          onPress={() => handleSocialLogin('apple')}
+          disabled={submitting}
+          accessibilityRole="button"
+          accessibilityLabel="Appleでログイン"
+        >
+          <Text style={styles.appleButtonText}>Appleでログイン</Text>
+        </TouchableOpacity>
+      )}
 
       <View style={styles.divider} />
 
@@ -142,6 +186,51 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#e0e0e0',
     marginBottom: 20,
+  },
+  socialDividerRow: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  socialDividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#e0e0e0',
+  },
+  socialDividerText: {
+    marginHorizontal: 10,
+    fontSize: 12,
+    color: '#888888',
+  },
+  socialButton: {
+    width: '100%',
+    borderRadius: 8,
+    paddingVertical: 13,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  socialButtonDisabled: {
+    opacity: 0.5,
+  },
+  googleButton: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#cccccc',
+  },
+  googleButtonText: {
+    color: '#333333',
+    fontSize: 15,
+    fontWeight: 'bold',
+  },
+  appleButton: {
+    backgroundColor: '#000000',
+    marginBottom: 20,
+  },
+  appleButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: 'bold',
   },
   demoHint: {
     width: '100%',

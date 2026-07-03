@@ -1,4 +1,4 @@
 <resources>
     <string name="app_name">megálē várka</string>
-    <string name="streak_widget_description">健康記録の連続日数を炎で表示します</string>
+    <string name="streak_widget_description">健康記録の累計日数を炎で表示します</string>
 </resources>

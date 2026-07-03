@@ -30,6 +30,27 @@ bundle install
 bundle exec pod install
 ```
 
+## ソーシャルログイン（Google / Apple）のセットアップ
+
+コード側は実装済みです。ビルド前に以下の設定が必要です。
+
+**共通（Firebase Console）**
+
+1. Authentication > ログイン方法 で「Google」「Apple」を有効化
+2. Google のウェブクライアントIDを `.env` の `GOOGLE_WEB_CLIENT_ID` に設定
+
+**iOS**
+
+1. `bundle exec pod install` を再実行（ネイティブモジュールの追加のため）
+2. Firebase Console から iOS 用 `GoogleService-Info.plist` をダウンロードして `ios/` に配置
+3. Xcode で Info > URL Types に `GoogleService-Info.plist` の `REVERSED_CLIENT_ID` を追加（Googleログインのコールバック用）
+4. Xcode > Signing & Capabilities で「Sign in with Apple」を追加（`megale_varka.entitlements` にはキーを追加済み）
+
+**Android**
+
+1. Firebase Console のプロジェクト設定に、デバッグ／リリース用の SHA-1 フィンガープリントを登録
+   （`cd android && ./gradlew signingReport` で確認できます）
+
 ## 起動方法
 
 **Step 1: Metro バンドラーを起動する**

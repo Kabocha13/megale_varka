@@ -50,7 +50,8 @@ export interface ConditionSummary {
   avgMood: number | null;       // window average (1-5)
   shortSleepTrend: boolean;     // avg < 6h over 3+ records
   lowMoodTrend: boolean;        // avg mood <= 2.5 over 3+ records
-  streak: number;               // consecutive on-time recording days
+  // 累計記録日数。連続が途切れてもリセットしない積み上げ型カウント
+  totalRecordedDays: number;
 }
 
 export type AdviceTone = 'warning' | 'info' | 'good';
@@ -201,27 +202,16 @@ function avg(nums: number[]): number | null {
   return nums.reduce((a, b) => a + b, 0) / nums.length;
 }
 
-function computeStreakFrom(dates: Set<string>, today: string): number {
-  let cursor = today;
-  if (!dates.has(cursor)) {
-    const [y, m, d] = cursor.split('-').map(Number);
-    const dt = new Date(y, m - 1, d);
-    dt.setDate(dt.getDate() - 1);
-    cursor = dateToString(dt);
-  }
-  let count = 0;
-  while (dates.has(cursor)) {
-    count += 1;
-    const [y, m, d] = cursor.split('-').map(Number);
-    const dt = new Date(y, m - 1, d);
-    dt.setDate(dt.getDate() - 1);
-    cursor = dateToString(dt);
-  }
-  return count;
-}
-
-/** records: chronological (oldest → newest), typically the last 7-14 days. */
-export function computeConditionSummary(records: HealthRecord[], today: string): ConditionSummary {
+/**
+ * records: chronological (oldest → newest), typically the last 7-14 days.
+ * totalRecordedDays: 生涯の累計記録日数（別途集計クエリで取得）。
+ * 未指定ならウィンドウ内の記録数にフォールバックする。
+ */
+export function computeConditionSummary(
+  records: HealthRecord[],
+  today: string,
+  totalRecordedDays?: number,
+): ConditionSummary {
   const latest = records.length ? records[records.length - 1] : null;
   const recordedToday = latest?.date === today;
 
@@ -235,10 +225,6 @@ export function computeConditionSummary(records: HealthRecord[], today: string):
   const avgSleep = avg(sleeps);
   const avgMood = avg(moods);
 
-  const onTimeDates = new Set(
-    records.filter(r => r.isRetroactive !== true).map(r => r.date),
-  );
-
   return {
     recordedToday,
     recordCount: records.length,
@@ -249,7 +235,7 @@ export function computeConditionSummary(records: HealthRecord[], today: string):
     avgMood,
     shortSleepTrend: sleeps.length >= 3 && avgSleep !== null && avgSleep < 6,
     lowMoodTrend: moods.length >= 3 && avgMood !== null && avgMood <= 2.5,
-    streak: computeStreakFrom(onTimeDates, today),
+    totalRecordedDays: totalRecordedDays ?? records.length,
   };
 }
 
@@ -272,7 +258,10 @@ export type PlanKind = 'busy' | 'work' | 'rest' | 'normal';
 export interface WeeklyPlanDay {
   date: string;       // YYYY-MM-DD
   weekday: number;    // 0(日)-6(土)
-  eventCount: number;
+  // 締切はその日に「やる」ものではなく期限なので、面接（実際にその時間を
+  // 拘束される予定）とは区別してマーカー表示にする
+  deadlineCount: number;
+  interviewCount: number;
   hasInterview: boolean;
   tendency: number | null; // この曜日の過去の平均コンディション（0-100）
   kind: PlanKind;
@@ -280,7 +269,8 @@ export interface WeeklyPlanDay {
 
 export interface WeeklyPlan {
   days: WeeklyPlanDay[];
-  recommendedDate: string | null; // 予定がなくコンディション傾向が最も良い日
+  recommendedDate: string | null; // 面接がなくコンディション傾向が最も良い日
+  weekDeadlineCount: number;      // 今後7日間の締切数
 }
 
 function addDays(dateStr: string, offset: number): string {
@@ -296,8 +286,10 @@ function weekdayOf(dateStr: string): number {
 }
 
 /**
- * 過去の健康記録の「曜日ごとのコンディション傾向」と今後7日間の締切密度から、
+ * 過去の健康記録の「曜日ごとのコンディション傾向」と今後7日間の予定から、
  * 作業に向いた日・休息すべき日を提案する。
+ * 面接はその日に時間を拘束される「予定」、タスク期限はあくまで「締切」として
+ * 扱い、締切日はマーカー表示のみで busy にはしない。
  */
 export function buildWeeklyPlan(
   records: HealthRecord[],
@@ -318,17 +310,20 @@ export function buildWeeklyPlan(
   for (let i = 0; i < 7; i++) {
     const date = addDays(today, i);
     const dayEvents = events.filter(e => e.date === date);
+    const interviewCount = dayEvents.filter(e => e.isInterview).length;
+    const deadlineCount = dayEvents.length - interviewCount;
     const weekday = weekdayOf(date);
     const tendency = tendencies[weekday];
     let kind: PlanKind = 'normal';
-    if (dayEvents.length > 0) kind = 'busy';
+    if (interviewCount > 0) kind = 'busy';
     else if (tendency !== null && tendency >= 55) kind = 'work';
     else if (tendency !== null && tendency < 40) kind = 'rest';
     days.push({
       date,
       weekday,
-      eventCount: dayEvents.length,
-      hasInterview: dayEvents.some(e => e.isInterview),
+      deadlineCount,
+      interviewCount,
+      hasInterview: interviewCount > 0,
       tendency,
       kind,
     });
@@ -337,7 +332,7 @@ export function buildWeeklyPlan(
   let recommendedDate: string | null = null;
   let best = -1;
   for (const day of days) {
-    if (day.eventCount > 0 || day.tendency === null) continue;
+    if (day.hasInterview || day.tendency === null) continue;
     if (day.tendency > best) {
       best = day.tendency;
       recommendedDate = day.date;
@@ -345,7 +340,11 @@ export function buildWeeklyPlan(
   }
   if (best < 45) recommendedDate = null; // 傾向が良い日がなければ提案しない
 
-  return { days, recommendedDate };
+  return {
+    days,
+    recommendedDate,
+    weekDeadlineCount: days.reduce((sum, d) => sum + d.deadlineCount, 0),
+  };
 }
 
 // ─── Interview retrospective ─────────────────────────────────────────────────
@@ -556,14 +555,14 @@ export function buildSupportAdvice(
     });
   }
 
-  // 8. 記録の継続を称える
-  if (condition.streak >= 3) {
+  // 8. 記録の積み重ねを称える（連続でなくてもリセットされない累計日数）
+  if (condition.totalRecordedDays >= 3) {
     advice.push({
       id: 'streak',
       tone: 'good',
       icon: 'local-fire-department',
-      title: `体調記録が${condition.streak}日連続です`,
-      message: '記録の継続は自己管理力の証拠。面接で自己管理について聞かれたときのエピソードにもなります。',
+      title: `体調記録が${condition.totalRecordedDays}日分たまっています`,
+      message: '記録の積み重ねは自己管理力の証拠。面接で自己管理について聞かれたときのエピソードにもなります。',
     });
   }
 

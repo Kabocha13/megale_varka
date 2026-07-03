@@ -13,7 +13,7 @@ import MaterialIcons from '@react-native-vector-icons/material-icons';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import LineChart, { LinePoint } from '../components/charts/LineChart';
-import { HealthRecord } from '../services/statsService';
+import { fetchTotalRecordedDays, HealthRecord } from '../services/statsService';
 import {
   calculateJobSearchProgress,
   JOB_COMPANIES_STORAGE_KEY,
@@ -108,12 +108,13 @@ export default function JobSupportScreen() {
   const load = useCallback(async () => {
     if (!uid) return;
     const today = dateToString(new Date());
-    const [companies, records] = await Promise.all([
+    const [companies, records, totalDays] = await Promise.all([
       loadCompanies(uid, isDemo).catch(() => [] as SupportCompany[]),
       loadRecentHealthRecords(uid, 30).catch(() => [] as HealthRecord[]),
+      fetchTotalRecordedDays(uid),
     ]);
     // コンディションは直近7件、傾向分析・振り返りは30日分を使う
-    const cond = computeConditionSummary(records.slice(-7), today);
+    const cond = computeConditionSummary(records.slice(-7), today, totalDays ?? records.length);
     const evts = collectUpcomingEvents(companies, today);
     setCondition(cond);
     setEvents(evts);
@@ -181,10 +182,10 @@ export default function JobSupportScreen() {
               {condition.avgSleepHours !== null && (
                 <Text style={s.condMeta}>直近平均睡眠 {condition.avgSleepHours.toFixed(1)}h</Text>
               )}
-              {condition.streak > 0 && (
+              {condition.totalRecordedDays > 0 && (
                 <View style={s.condMetaRowItem}>
                   <MaterialIcons name="local-fire-department" size={13} color={C.warning} />
-                  <Text style={s.condMeta}>記録 {condition.streak}日連続</Text>
+                  <Text style={s.condMeta}>記録 {condition.totalRecordedDays}日</Text>
                 </View>
               )}
             </View>
@@ -234,17 +235,32 @@ export default function JobSupportScreen() {
                       <MaterialIcons name="mic" size={12} color={C.warning} />
                     ) : (
                       <Text style={s.dayChipMark}>
-                        {day.eventCount > 0 ? `${day.eventCount}件` : day.kind === 'work' ? '◎' : day.kind === 'rest' ? '休' : '　'}
+                        {day.kind === 'work' ? '◎' : day.kind === 'rest' ? '休' : '　'}
                       </Text>
                     )}
+                    {/* 締切はその日にやる予定ではなく期限のためマーカーで区別 */}
+                    <View style={s.dayChipDeadlineRow}>
+                      {day.deadlineCount > 0 ? (
+                        <>
+                          <MaterialIcons name="flag" size={10} color={C.danger} />
+                          <Text style={s.dayChipDeadlineText}>{day.deadlineCount}</Text>
+                        </>
+                      ) : (
+                        <Text style={s.dayChipDeadlineText}>　</Text>
+                      )}
+                    </View>
                   </View>
                 );
               })}
             </View>
             <View style={s.weekLegend}>
               <View style={s.weekLegendRow}>
-                <View style={[s.weekLegendSwatch, { backgroundColor: C.warning }]} />
-                <Text style={s.weekLegendItem}>予定あり</Text>
+                <MaterialIcons name="mic" size={11} color={C.warning} />
+                <Text style={s.weekLegendItem}>面接</Text>
+              </View>
+              <View style={s.weekLegendRow}>
+                <MaterialIcons name="flag" size={11} color={C.danger} />
+                <Text style={s.weekLegendItem}>締切</Text>
               </View>
               <View style={s.weekLegendRow}>
                 <View style={[s.weekLegendSwatch, { backgroundColor: C.success }]} />
@@ -257,7 +273,10 @@ export default function JobSupportScreen() {
             </View>
             {weekly.recommendedDate ? (
               <Text style={s.weekNote}>
-                {formatShortDate(weekly.recommendedDate)}（{WEEKDAY_CHARS[dayOfWeek(weekly.recommendedDate)]}）は過去の体調傾向が良い日です。ESの作成や企業研究を進めるのにおすすめです。
+                {formatShortDate(weekly.recommendedDate)}（{WEEKDAY_CHARS[dayOfWeek(weekly.recommendedDate)]}）は過去の体調傾向が良い日です。
+                {weekly.weekDeadlineCount > 0
+                  ? `今週の締切（${weekly.weekDeadlineCount}件）に向けて、この日に前倒しで進めるのがおすすめです。`
+                  : 'ESの作成や企業研究を進めるのにおすすめです。'}
               </Text>
             ) : weekly.days.every(d => d.tendency === null) ? (
               <Text style={s.weekNote}>
@@ -472,6 +491,13 @@ const s = StyleSheet.create({
   dayChipWeekday: { fontSize: 11, color: C.sub },
   dayChipDate: { fontSize: 15, fontWeight: 'bold', color: C.text, marginVertical: 2 },
   dayChipMark: { fontSize: 10, color: C.sub },
+  dayChipDeadlineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+    minHeight: 12,
+  },
+  dayChipDeadlineText: { fontSize: 9, color: C.danger, fontWeight: 'bold' },
   weekLegend: { flexDirection: 'row', gap: 12, marginTop: 10 },
   weekLegendRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   weekLegendSwatch: { width: 10, height: 10, borderRadius: 2 },

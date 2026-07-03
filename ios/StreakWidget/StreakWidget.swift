@@ -78,7 +78,7 @@ struct StreakWidgetView: View {
                 .font(.system(size: 26, weight: .bold, design: .rounded))
                 .foregroundColor(.primary)
 
-            Text("日連続")
+            Text("日の記録")
                 .font(.caption2)
                 .foregroundColor(.secondary)
         }
@@ -95,8 +95,8 @@ struct StreakWidgetMain: Widget {
         StaticConfiguration(kind: kind, provider: StreakProvider()) { entry in
             StreakWidgetView(entry: entry)
         }
-        .configurationDisplayName("継続記録")
-        .description("健康記録の連続日数を炎で表示します")
+        .configurationDisplayName("記録日数")
+        .description("健康記録の累計日数を炎で表示します")
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }
