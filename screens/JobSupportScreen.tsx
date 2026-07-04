@@ -15,11 +15,7 @@ import { useAuth } from '../context/AuthContext';
 import LineChart, { LinePoint } from '../components/charts/LineChart';
 import { fetchTotalRecordedDays, HealthRecord } from '../services/statsService';
 import { getGraduationYear } from '../services/profile';
-import {
-  calculateJobSearchProgress,
-  JOB_COMPANIES_STORAGE_KEY,
-  JobSearchProgress,
-} from '../services/jobSearchProgress';
+import { JOB_COMPANIES_STORAGE_KEY } from '../services/jobSearchProgress';
 import {
   buildInterviewRetrospective,
   buildSupportAdvice,
@@ -104,7 +100,6 @@ export default function JobSupportScreen() {
   const [condition, setCondition] = useState<ConditionSummary | null>(null);
   const [events, setEvents] = useState<SupportEvent[]>([]);
   const [advice, setAdvice] = useState<SupportAdvice[]>([]);
-  const [progress, setProgress] = useState<JobSearchProgress | null>(null);
   const [weekly, setWeekly] = useState<WeeklyPlan | null>(null);
   const [retro, setRetro] = useState<InterviewRetroItem[]>([]);
   const [chartPoints, setChartPoints] = useState<LinePoint[]>([]);
@@ -129,7 +124,6 @@ export default function JobSupportScreen() {
     setCondition(cond);
     setEvents(evts);
     setAdvice(buildSupportAdvice(cond, evts, companies, 5, currentPhase));
-    setProgress(calculateJobSearchProgress(companies));
     setWeekly(buildWeeklyPlan(records, evts, today));
     setRetro(buildInterviewRetrospective(companies, records, today));
     setChartPoints(
@@ -385,23 +379,6 @@ export default function JobSupportScreen() {
         </>
       )}
 
-      {/* 就活進捗 */}
-      {progress && (
-        <>
-          <Text style={s.sectionTitle}>就活の積み上げ</Text>
-          <View style={s.card}>
-            <View style={s.progressHeader}>
-              <Text style={s.progressScore}>{progress.score}</Text>
-              <Text style={s.progressUnit}>/ 100</Text>
-            </View>
-            <View style={s.progressTrack}>
-              <View style={[s.progressBar, { width: `${progress.score}%` }]} />
-            </View>
-            <Text style={s.progressLabel}>{progress.label}</Text>
-          </View>
-        </>
-      )}
-
       <View style={s.bottomSpace} />
     </ScrollView>
   );
@@ -499,12 +476,6 @@ const s = StyleSheet.create({
   eventTitleIcon: { marginRight: 4 },
   eventTitle: { flexShrink: 1, fontSize: 14, color: C.text, fontWeight: '500' },
   eventMeta: { fontSize: 12, color: C.sub, marginTop: 2 },
-  progressHeader: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 8 },
-  progressScore: { fontSize: 32, fontWeight: 'bold', color: C.primary },
-  progressUnit: { fontSize: 14, color: C.muted, marginBottom: 5, marginLeft: 4 },
-  progressTrack: { height: 10, backgroundColor: '#EEE', borderRadius: 5, overflow: 'hidden', marginBottom: 8 },
-  progressBar: { height: '100%', borderRadius: 5, backgroundColor: C.primary },
-  progressLabel: { fontSize: 13, color: C.sub },
   weekRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 4 },
   dayChip: {
     flex: 1,

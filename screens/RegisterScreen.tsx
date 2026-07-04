@@ -14,6 +14,22 @@ type Props = {
   onNavigateToLogin: () => void;
 };
 
+function validatePassword(password: string): string | null {
+  if (password.length < 6) {
+    return 'パスワードは6文字以上で入力してください。';
+  }
+  if (!/[A-Z]/.test(password)) {
+    return 'パスワードには大文字のアルファベットを含めてください。';
+  }
+  if (!/[a-z]/.test(password)) {
+    return 'パスワードには小文字のアルファベットを含めてください。';
+  }
+  if (!/\d/.test(password)) {
+    return 'パスワードには数字を含めてください。';
+  }
+  return null;
+}
+
 function RegisterScreen({ onNavigateToLogin }: Props) {
   const { register } = useAuth();
   const [email, setEmail] = useState('');
@@ -25,11 +41,9 @@ function RegisterScreen({ onNavigateToLogin }: Props) {
       Alert.alert('エラー', 'メールアドレスとパスワードを入力してください。');
       return;
     }
-    if (password.length < 6) {
-      Alert.alert(
-        'パスワードが短すぎます',
-        'パスワードは6文字以上で入力してください。',
-      );
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      Alert.alert('パスワードが条件を満たしていません', passwordError);
       return;
     }
     setSubmitting(true);
@@ -66,8 +80,8 @@ function RegisterScreen({ onNavigateToLogin }: Props) {
         editable={!submitting}
       />
 
-      <Text style={[styles.passwordHint, password.length > 0 && password.length < 6 && styles.passwordHintError]}>
-        パスワードは6文字以上で入力してください
+      <Text style={[styles.passwordHint, password.length > 0 && validatePassword(password) !== null && styles.passwordHintError]}>
+        パスワードは6文字以上で、大文字・小文字・数字をそれぞれ1文字以上含めてください
         {password.length > 0 && password.length < 6 ? `（あと${6 - password.length}文字）` : ''}
       </Text>
 

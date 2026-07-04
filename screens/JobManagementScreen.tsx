@@ -35,10 +35,12 @@ import {
   scheduleInterviewEveNotification,
   scheduleTaskNotification,
 } from '../services/notifications';
+import { JOB_COMPANIES_STORAGE_KEY } from '../services/jobSearchProgress';
 import {
-  JOB_COMPANIES_STORAGE_KEY,
-  withUpdatedCompanyProgress,
-} from '../services/jobSearchProgress';
+  deleteMyPagePassword,
+  getMyPagePassword,
+  saveMyPagePassword,
+} from '../services/securePasswords';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -59,6 +61,13 @@ interface Task {
   completed: boolean;
 }
 
+interface InterviewRecord {
+  id: string;
+  stage: string;   // 一次面接・二次面接など
+  date: string;    // YYYY-MM-DD（未設定は空文字）
+  note: string;    // 聞かれた質問・回答などの自由記述
+}
+
 type ESStatus = '下書き' | '提出済';
 
 interface ESQAItem {
@@ -76,33 +85,20 @@ interface ESItem {
   qaItems: ESQAItem[];
 }
 
-// 面接ノート: 逆質問の準備と、実際に聞かれた質問の記録
-interface InterviewQA {
-  id: string;
-  question: string;
-  memo: string;
-}
-
-interface InterviewSheet {
-  reverseQuestions: InterviewQA[]; // 事前に準備する逆質問
-  askedQuestions: InterviewQA[];   // 面接で聞かれた質問の記録
-  updatedAt: string;
-}
-
 interface Company {
   id: string;
   name: string;
   myPageUrl: string;
   myPageLoginId: string;
+  myPageLoginPassword: string;
   currentGoal: GoalType | '';
   selectionStatus: string;
   desireLevel: DesireLevel | '';
   tasks: Task[];
+  interviews: InterviewRecord[];
   globalFieldValues: Record<string, string>;
   memo: string;
   entrySheet: ESItem | null;
-  interviewSheet: InterviewSheet | null;
-  progressXp?: number;
   nextInterviewDate: string; // YYYY-MM-DD（未設定は ''）
   nextInterviewTime: string; // HH:mm（未設定は ''）
 }
@@ -172,6 +168,16 @@ const ES_STATUS_COLOR: Record<ESStatus, string> = {
   '提出済': '#4CAF50',
 };
 
+const INTERVIEW_STAGE_OPTIONS: string[] = [
+  'カジュアル面談',
+  'リクルーター面談',
+  '一次面接',
+  '二次面接',
+  '三次面接',
+  '最終面接',
+  'その他',
+];
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function makeUid(): string {
@@ -216,43 +222,70 @@ function makeEmptyCompany(): Company {
     name: '',
     myPageUrl: '',
     myPageLoginId: '',
+    myPageLoginPassword: '',
     currentGoal: '',
     selectionStatus: '',
     desireLevel: '',
     tasks: [],
+    interviews: [],
     globalFieldValues: {},
     memo: '',
     entrySheet: null,
-    interviewSheet: null,
     nextInterviewDate: '',
     nextInterviewTime: '',
   };
 }
 
-function makeEmptyInterviewQA(): InterviewQA {
-  return { id: makeUid(), question: '', memo: '' };
+// 廃止した「面接ノート」のデータを面接記録（自由記述）1件に変換して引き継ぐ
+function migrateInterviewSheetToRecords(data: unknown): InterviewRecord[] {
+  if (!isPlainObject(data)) return [];
+  const qaText = (item: unknown): string => {
+    if (!isPlainObject(item)) return '';
+    const question = typeof item.question === 'string' ? item.question.trim() : '';
+    const memo = typeof item.memo === 'string' ? item.memo.trim() : '';
+    return question && memo ? `${question}\n${memo}` : question || memo;
+  };
+  const asked = Array.isArray(data.askedQuestions) ? data.askedQuestions.map(qaText).filter(Boolean) : [];
+  const reverse = Array.isArray(data.reverseQuestions) ? data.reverseQuestions.map(qaText).filter(Boolean) : [];
+  const parts: string[] = [];
+  if (asked.length) parts.push(`【聞かれた質問】\n${asked.join('\n\n')}`);
+  if (reverse.length) parts.push(`【逆質問の準備】\n${reverse.join('\n\n')}`);
+  if (!parts.length) return [];
+  return [{ id: makeUid(), stage: 'その他', date: '', note: parts.join('\n\n') }];
 }
 
-function makeEmptyInterviewSheet(): InterviewSheet {
-  return { reverseQuestions: [makeEmptyInterviewQA()], askedQuestions: [], updatedAt: nowISO() };
+function makeEmptyInterview(): InterviewRecord {
+  return { id: makeUid(), stage: '一次面接', date: '', note: '' };
 }
 
-function normalizeInterviewQA(data: unknown): InterviewQA {
+function normalizeInterview(data: unknown): InterviewRecord {
   const d = isPlainObject(data) ? data : {};
   return {
     id: typeof d.id === 'string' && d.id ? d.id : makeUid(),
-    question: typeof d.question === 'string' ? d.question : '',
-    memo: typeof d.memo === 'string' ? d.memo : '',
+    stage: typeof d.stage === 'string' ? d.stage : '',
+    date: typeof d.date === 'string' ? d.date : '',
+    note: typeof d.note === 'string' ? d.note : '',
   };
 }
 
-function normalizeInterviewSheet(data: unknown): InterviewSheet | null {
-  if (!isPlainObject(data)) return null;
-  return {
-    reverseQuestions: Array.isArray(data.reverseQuestions) ? data.reverseQuestions.map(normalizeInterviewQA) : [],
-    askedQuestions: Array.isArray(data.askedQuestions) ? data.askedQuestions.map(normalizeInterviewQA) : [],
-    updatedAt: typeof data.updatedAt === 'string' && data.updatedAt ? data.updatedAt : nowISO(),
-  };
+// キーチェーンからパスワードを取り込む。旧形式（Firestore/AsyncStorageに平文で
+// 保存されていた場合）はキーチェーンへ移行し、次回保存時に平文が消える。
+async function withKeychainPassword(company: Company): Promise<Company> {
+  const stored = await getMyPagePassword(company.id);
+  if (stored) {
+    return { ...company, myPageLoginPassword: stored };
+  }
+  if (company.myPageLoginPassword) {
+    await saveMyPagePassword(company.id, company.myPageLoginPassword).catch(() => {});
+  }
+  return company;
+}
+
+// 永続化データからパスワードを除外する（キーチェーンにのみ保存する）
+function withoutPassword(company: Company): Omit<Company, 'myPageLoginPassword'> {
+  const rest: Partial<Company> = { ...company };
+  delete rest.myPageLoginPassword;
+  return rest as Omit<Company, 'myPageLoginPassword'>;
 }
 
 function normalizeQA(data: unknown): ESQAItem {
@@ -551,6 +584,12 @@ function openUrl(url: string): void {
   });
 }
 
+function copyValue(label: string, value: string): void {
+  if (!value) return;
+  Clipboard.setString(value);
+  Alert.alert('コピーしました', `${label}をクリップボードにコピーしました。`);
+}
+
 function parseDate(s: string): Date {
   if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date();
   const [y, m, d] = s.split('-').map(Number);
@@ -620,14 +659,16 @@ const pfS = StyleSheet.create({
 function DatePickerField({
   value,
   onChange,
+  allowPast,
 }: {
   value: string;
   onChange: (v: string) => void;
+  allowPast?: boolean;
 }) {
   const [show, setShow] = useState(false);
   const today = new Date();
   const parsed = value ? parseDate(value) : today;
-  const date = parsed.getTime() < today.getTime() ? today : parsed;
+  const date = !allowPast && parsed.getTime() < today.getTime() ? today : parsed;
 
   const handleChange = (_: DateTimePickerEvent, selected?: Date) => {
     if (Platform.OS === 'android') setShow(false);
@@ -649,7 +690,7 @@ function DatePickerField({
       </TouchableOpacity>
 
       {Platform.OS === 'android' && show && (
-        <DateTimePicker value={date} mode="date" minimumDate={new Date()} onChange={handleChange} />
+        <DateTimePicker value={date} mode="date" minimumDate={allowPast ? undefined : new Date()} onChange={handleChange} />
       )}
       {Platform.OS === 'ios' && (
         <PickerFieldModal visible={show} onDone={() => setShow(false)}>
@@ -657,7 +698,7 @@ function DatePickerField({
             value={date}
             mode="date"
             display="spinner"
-            minimumDate={new Date()}
+            minimumDate={allowPast ? undefined : new Date()}
             onChange={handleChange}
             locale="ja"
             textColor="#000000"
@@ -858,6 +899,144 @@ const tiS = StyleSheet.create({
     color: C.text,
     backgroundColor: C.card,
   },
+  deleteBtn: { marginTop: 12, alignItems: 'center', paddingVertical: 8 },
+  deleteBtnText: { color: C.danger, fontSize: 13 },
+});
+
+// ─── InterviewItem ────────────────────────────────────────────────────────────
+
+interface InterviewItemProps {
+  interview: InterviewRecord;
+  onUpdate: (rec: InterviewRecord) => void;
+  onDelete: () => void;
+}
+
+function InterviewItem({ interview, onUpdate, onDelete }: InterviewItemProps) {
+  const [expanded, setExpanded] = useState(!interview.note);
+  const [showStagePicker, setShowStagePicker] = useState(false);
+
+  return (
+    <View style={irS.card}>
+      <TouchableOpacity
+        style={irS.header}
+        onPress={() => setExpanded(e => !e)}
+        activeOpacity={0.7}
+      >
+        <View style={irS.stageBadge}>
+          <Text style={irS.stageBadgeText}>{interview.stage || '面接'}</Text>
+        </View>
+        <Text style={irS.notePreview} numberOfLines={1}>
+          {interview.note || '（記録未入力）'}
+        </Text>
+        {interview.date ? (
+          <Text style={irS.date}>{displayDate(interview.date)}</Text>
+        ) : null}
+        <Text style={irS.chevron}>{expanded ? '▲' : '▼'}</Text>
+      </TouchableOpacity>
+
+      {expanded && (
+        <View style={irS.body}>
+          <Text style={irS.label}>面接の種類</Text>
+          <TouchableOpacity style={irS.selectBtn} onPress={() => setShowStagePicker(true)}>
+            <Text style={interview.stage ? irS.selectValue : irS.selectPlaceholder}>
+              {interview.stage || '選択してください'}
+            </Text>
+            <Text style={irS.selectArrow}>▼</Text>
+          </TouchableOpacity>
+
+          <Text style={irS.label}>実施日（任意）</Text>
+          <DatePickerField
+            value={interview.date}
+            onChange={v => onUpdate({ ...interview, date: v })}
+            allowPast
+          />
+
+          <Text style={irS.label}>聞かれた質問・回答など（自由記述）</Text>
+          <TextInput
+            style={[irS.input, irS.inputNote]}
+            value={interview.note}
+            onChangeText={v => onUpdate({ ...interview, note: v })}
+            placeholder={'覚えている範囲で自由に記録できます。\n例：ガクチカを深掘りされた。逆質問では〇〇を聞いた。'}
+            placeholderTextColor={C.muted}
+            multiline
+            textAlignVertical="top"
+          />
+
+          <TouchableOpacity style={irS.deleteBtn} onPress={onDelete}>
+            <Text style={irS.deleteBtnText}>この面接記録を削除</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      <PickerModal
+        visible={showStagePicker}
+        title="面接の種類を選択"
+        options={INTERVIEW_STAGE_OPTIONS}
+        value={interview.stage}
+        onSelect={v => onUpdate({ ...interview, stage: v })}
+        onClose={() => setShowStagePicker(false)}
+      />
+    </View>
+  );
+}
+
+const irS = StyleSheet.create({
+  card: {
+    backgroundColor: '#F8F8F8',
+    borderRadius: 8,
+    marginBottom: 8,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+  },
+  stageBadge: {
+    backgroundColor: C.primary,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    marginRight: 10,
+  },
+  stageBadgeText: { color: C.card, fontSize: 12, fontWeight: 'bold' },
+  notePreview: { flex: 1, fontSize: 14, color: C.text },
+  date: { fontSize: 12, color: C.light, marginRight: 6 },
+  chevron: { fontSize: 11, color: C.muted },
+  body: {
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+  },
+  label: { fontSize: 12, color: C.sub, marginTop: 10, marginBottom: 4 },
+  input: {
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: C.text,
+    backgroundColor: C.card,
+  },
+  inputNote: { minHeight: 120, textAlignVertical: 'top', lineHeight: 22 },
+  selectBtn: {
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#FAFAFA',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  selectValue: { fontSize: 14, color: C.text },
+  selectPlaceholder: { fontSize: 14, color: C.muted },
+  selectArrow: { fontSize: 11, color: C.muted },
   deleteBtn: { marginTop: 12, alignItems: 'center', paddingVertical: 8 },
   deleteBtnText: { color: C.danger, fontSize: 13 },
 });
@@ -1076,14 +1255,13 @@ interface CompanyViewScreenProps {
   onBack: () => void;
   onToggleTask: (taskId: string, completed: boolean) => void;
   onNavigateToES: () => void;
-  onNavigateToInterview: () => void;
 }
 
-function CompanyViewScreen({ company, globalFields, onEdit, onBack, onToggleTask, onNavigateToES, onNavigateToInterview }: CompanyViewScreenProps) {
+function CompanyViewScreen({ company, globalFields, onEdit, onBack, onToggleTask, onNavigateToES }: CompanyViewScreenProps) {
   const pendingTasks = company.tasks.filter(t => !t.completed);
   const doneTasks = company.tasks.filter(t => t.completed);
   const entrySheet = company.entrySheet ?? null;
-  const interviewSheet = company.interviewSheet ?? null;
+  const interviews = company.interviews ?? [];
 
   return (
     <View style={vS.root}>
@@ -1122,8 +1300,9 @@ function CompanyViewScreen({ company, globalFields, onEdit, onBack, onToggleTask
         <View style={vS.section}>
           <Text style={vS.sectionTitle}>基本情報</Text>
           <View style={vS.card}>
-            <ViewRow label="マイページURL" value={company.myPageUrl} isUrl />
-            <ViewRow label="ログインID" value={company.myPageLoginId} />
+            <ViewRow label="マイページURL" value={company.myPageUrl} isUrl copyLabel="マイページURL" />
+            <ViewRow label="ログインID" value={company.myPageLoginId} copyLabel="ログインID" />
+            <PasswordViewRow label="パスワード" value={company.myPageLoginPassword ?? ''} />
             <ViewRow
               label="次回面接"
               value={
@@ -1208,24 +1387,26 @@ function CompanyViewScreen({ company, globalFields, onEdit, onBack, onToggleTask
           )}
         </View>
 
-        {/* 面接ノート */}
+        {/* 面接記録 */}
         <View style={vS.section}>
-          <View style={esVS.sectionHeader}>
-            <Text style={vS.sectionTitle}>面接ノート</Text>
-            <TouchableOpacity
-              style={esVS.editEsBtn}
-              onPress={onNavigateToInterview}
-              accessibilityRole="button"
-            >
-              <Text style={esVS.editEsBtnText}>{interviewSheet ? '編集' : '作成'}</Text>
-            </TouchableOpacity>
-          </View>
-          {!interviewSheet ? (
-            <Text style={vS.emptyText}>逆質問や聞かれた質問をまだ記録していません</Text>
+          <Text style={vS.sectionTitle}>面接記録（{interviews.length}件）</Text>
+          {interviews.length === 0 ? (
+            <Text style={vS.emptyText}>面接の記録はまだありません</Text>
           ) : (
             <View style={vS.card}>
-              <ViewRow label="逆質問の準備" value={`${interviewSheet.reverseQuestions.length}件`} />
-              <ViewRow label="聞かれた質問の記録" value={`${interviewSheet.askedQuestions.length}件`} last />
+              {interviews.map((rec, i) => (
+                <View key={rec.id} style={[ivVS.row, i === interviews.length - 1 && vS.rowLast]}>
+                  <View style={ivVS.rowHeader}>
+                    <View style={ivVS.stageBadge}>
+                      <Text style={ivVS.stageBadgeText}>{rec.stage || '面接'}</Text>
+                    </View>
+                    {rec.date ? (
+                      <Text style={ivVS.date}>{displayDate(rec.date)}</Text>
+                    ) : null}
+                  </View>
+                  <Text style={ivVS.note}>{rec.note || '（記録未入力）'}</Text>
+                </View>
+              ))}
             </View>
           )}
         </View>
@@ -1264,26 +1445,90 @@ function ViewRow({
   label,
   value,
   isUrl,
+  copyLabel,
   last,
 }: {
   label: string;
   value: string;
   isUrl?: boolean;
+  copyLabel?: string;
   last?: boolean;
 }) {
+  const canCopy = !!copyLabel && !!value;
   return (
     <View style={[vS.row, last && vS.rowLast]}>
       <Text style={vS.rowLabel}>{label}</Text>
       {isUrl && value ? (
-        <TouchableOpacity
-          onPress={() => openUrl(value)}
-          hitSlop={{ top: 4, bottom: 4 }}
-        >
-          <Text style={vS.rowValueLink} numberOfLines={1}>{value}</Text>
-        </TouchableOpacity>
+        <View style={vS.rowValueWrap}>
+          <TouchableOpacity
+            style={vS.rowValuePressable}
+            onPress={() => openUrl(value)}
+            hitSlop={{ top: 4, bottom: 4 }}
+            accessibilityRole="link"
+            accessibilityLabel={`${label}を開く`}
+          >
+            <Text style={vS.rowValueLinkInline} numberOfLines={1}>{value}</Text>
+          </TouchableOpacity>
+          {canCopy && <CopyIconButton label={copyLabel} value={value} />}
+        </View>
+      ) : canCopy ? (
+        <View style={vS.rowValueWrap}>
+          <Text style={vS.rowValueInline} numberOfLines={1}>{value}</Text>
+          <CopyIconButton label={copyLabel} value={value} />
+        </View>
       ) : (
         <Text style={vS.rowValue} numberOfLines={2}>{value || '—'}</Text>
       )}
+    </View>
+  );
+}
+
+function CopyIconButton({ label, value }: { label: string; value: string }) {
+  return (
+    <TouchableOpacity
+      style={vS.rowIconButton}
+      onPress={() => copyValue(label, value)}
+      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+      accessibilityRole="button"
+      accessibilityLabel={`${label}をコピー`}
+    >
+      <MaterialIcons name="content-copy" size={18} color={C.sub} />
+    </TouchableOpacity>
+  );
+}
+
+function PasswordViewRow({
+  label,
+  value,
+  last,
+}: {
+  label: string;
+  value: string;
+  last?: boolean;
+}) {
+  const [visible, setVisible] = useState(false);
+
+  if (!value) {
+    return <ViewRow label={label} value="" last={last} />;
+  }
+
+  return (
+    <View style={[vS.row, last && vS.rowLast]}>
+      <Text style={vS.rowLabel}>{label}</Text>
+      <View style={vS.passwordValueWrap}>
+        <Text style={vS.passwordValueText} numberOfLines={1}>
+          {visible ? value : '••••••••'}
+        </Text>
+        <TouchableOpacity
+          onPress={() => setVisible(v => !v)}
+          hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+          accessibilityRole="button"
+          accessibilityLabel={visible ? 'パスワードを隠す' : 'パスワードを表示'}
+        >
+          <MaterialIcons name={visible ? 'visibility-off' : 'visibility'} size={18} color={C.sub} />
+        </TouchableOpacity>
+        <CopyIconButton label="パスワード" value={value} />
+      </View>
     </View>
   );
 }
@@ -1374,7 +1619,20 @@ const vS = StyleSheet.create({
   rowLast: { borderBottomWidth: 0 },
   rowLabel: { fontSize: 13, color: C.sub, flex: 1 },
   rowValue: { fontSize: 14, color: C.text, flex: 2, textAlign: 'right' },
-  rowValueLink: { fontSize: 14, color: C.primary, textDecorationLine: 'underline', flex: 2, textAlign: 'right' },
+  rowValueWrap: { flex: 2, minWidth: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 8 },
+  rowValuePressable: { flexShrink: 1, minWidth: 0 },
+  rowValueInline: { fontSize: 14, color: C.text, flexShrink: 1, minWidth: 0, textAlign: 'right' },
+  rowValueLinkInline: { fontSize: 14, color: C.primary, textDecorationLine: 'underline', textAlign: 'right' },
+  rowIconButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F3F0EC',
+  },
+  passwordValueWrap: { flex: 2, minWidth: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 8 },
+  passwordValueText: { fontSize: 14, color: C.text, flexShrink: 1, minWidth: 0, textAlign: 'right' },
   memoText: { fontSize: 14, color: C.text, paddingHorizontal: 16, paddingVertical: 12, lineHeight: 22 },
   emptyText: { fontSize: 13, color: C.muted, textAlign: 'center', paddingVertical: 8 },
   taskRow: {
@@ -1444,6 +1702,30 @@ const esVS = StyleSheet.create({
   qaQuestion: { fontSize: 14, color: C.text, marginBottom: 4, lineHeight: 20 },
   qaCharInfo: { fontSize: 12, color: C.light },
   qaCharInfoOver: { color: C.danger, fontWeight: 'bold' },
+});
+
+const ivVS = StyleSheet.create({
+  row: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+  },
+  rowHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  stageBadge: {
+    backgroundColor: C.primary,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  stageBadgeText: { color: '#FFF', fontSize: 12, fontWeight: 'bold' },
+  date: { fontSize: 12, color: C.light },
+  note: { fontSize: 14, color: C.text, lineHeight: 21 },
 });
 
 // ─── CompanyListScreen ────────────────────────────────────────────────────────
@@ -1740,14 +2022,14 @@ interface CompanyDetailScreenProps {
   onSave: (c: Company) => void;
   onDelete: () => void;
   onNavigateToES?: (c: Company) => void;
-  onNavigateToInterview?: (c: Company) => void;
   onBack: () => void;
 }
 
-function CompanyDetailScreen({ company, isNew, globalFields, listResetKey = 0, onUpdateGlobalFields, onSave, onDelete, onNavigateToES, onNavigateToInterview, onBack }: CompanyDetailScreenProps) {
+function CompanyDetailScreen({ company, isNew, globalFields, listResetKey = 0, onUpdateGlobalFields, onSave, onDelete, onNavigateToES, onBack }: CompanyDetailScreenProps) {
   const [form, setForm] = useState<Company>(company);
   const [picker, setPicker] = useState<'goal' | 'desire' | 'status' | null>(null);
   const [showGlobalFieldsModal, setShowGlobalFieldsModal] = useState(false);
+  const [showMyPagePassword, setShowMyPagePassword] = useState(false);
   const originalRef = useRef(JSON.stringify(company));
   const listResetKeyRef = useRef(listResetKey);
 
@@ -1793,16 +2075,6 @@ function CompanyDetailScreen({ company, isNew, globalFields, listResetKey = 0, o
     onNavigateToES?.(form);
   };
 
-  const handleNavigateToInterview = () => {
-    if (!form.name.trim()) {
-      Alert.alert('エラー', '会社名を入力してください。');
-      return;
-    }
-    onSave(form);
-    originalRef.current = JSON.stringify(form);
-    onNavigateToInterview?.(form);
-  };
-
   const handleDelete = () => {
     Alert.alert(
       '企業を削除',
@@ -1822,6 +2094,21 @@ function CompanyDetailScreen({ company, isNew, globalFields, listResetKey = 0, o
 
   const deleteTask = (id: string) =>
     set('tasks', form.tasks.filter(x => x.id !== id));
+
+  const interviews = form.interviews ?? [];
+
+  const addInterview = () =>
+    set('interviews', [...interviews, makeEmptyInterview()]);
+
+  const updateInterview = (id: string, rec: InterviewRecord) =>
+    set('interviews', interviews.map(x => x.id === id ? rec : x));
+
+  const deleteInterview = (id: string) => {
+    Alert.alert('面接記録を削除', 'この面接の記録を削除しますか？', [
+      { text: 'キャンセル', style: 'cancel' },
+      { text: '削除', style: 'destructive', onPress: () => set('interviews', interviews.filter(x => x.id !== id)) },
+    ]);
+  };
 
   return (
     <View style={dS.root}>
@@ -1871,6 +2158,32 @@ function CompanyDetailScreen({ company, isNew, globalFields, listResetKey = 0, o
             placeholderTextColor={C.muted}
             autoCapitalize="none"
           />
+
+          <Text style={dS.fieldLabel}>マイページパスワード</Text>
+          <View style={dS.passwordRow}>
+            <TextInput
+              style={[dS.input, dS.passwordInput]}
+              value={form.myPageLoginPassword}
+              onChangeText={v => set('myPageLoginPassword', v)}
+              placeholder="マイページのパスワード"
+              placeholderTextColor={C.muted}
+              autoCapitalize="none"
+              autoCorrect={false}
+              secureTextEntry={!showMyPagePassword}
+            />
+            <TouchableOpacity
+              style={dS.passwordToggle}
+              onPress={() => setShowMyPagePassword(v => !v)}
+              accessibilityRole="button"
+              accessibilityLabel={showMyPagePassword ? 'パスワードを隠す' : 'パスワードを表示'}
+            >
+              <MaterialIcons
+                name={showMyPagePassword ? 'visibility-off' : 'visibility'}
+                size={20}
+                color={C.sub}
+              />
+            </TouchableOpacity>
+          </View>
 
           <SelectField
             label="現目標"
@@ -1956,27 +2269,29 @@ function CompanyDetailScreen({ company, isNew, globalFields, listResetKey = 0, o
               </View>
             </View>
 
-            <Text style={dS.sectionTitle}>面接ノート</Text>
-            <View style={dS.section}>
-              <View style={dS.esHeader}>
-                <View style={dS.esInfo}>
-                  <Text style={dS.esTitle}>
-                    {form.interviewSheet
-                      ? `逆質問 ${form.interviewSheet.reverseQuestions.length}件 / 記録 ${form.interviewSheet.askedQuestions.length}件`
-                      : 'まだ作成されていません'}
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  style={dS.esActionBtn}
-                  onPress={handleNavigateToInterview}
-                  accessibilityRole="button"
-                >
-                  <Text style={dS.esActionBtnText}>{form.interviewSheet ? '編集' : '作成'}</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
           </>
         )}
+
+        {/* ── 面接記録 ── */}
+        <Text style={dS.sectionTitle}>面接記録</Text>
+        <View style={dS.section}>
+          {interviews.length === 0 && (
+            <Text style={dS.emptySectionText}>
+              一次面接・二次面接など、面接ごとに聞かれた質問や回答を記録できます
+            </Text>
+          )}
+          {interviews.map(rec => (
+            <InterviewItem
+              key={rec.id}
+              interview={rec}
+              onUpdate={updated => updateInterview(rec.id, updated)}
+              onDelete={() => deleteInterview(rec.id)}
+            />
+          ))}
+          <TouchableOpacity style={dS.addBtn} onPress={addInterview}>
+            <Text style={dS.addBtnText}>＋ 面接記録を追加</Text>
+          </TouchableOpacity>
+        </View>
 
         {/* ── タスク管理 ── */}
         <Text style={dS.sectionTitle}>タスク管理</Text>
@@ -2004,7 +2319,7 @@ function CompanyDetailScreen({ company, isNew, globalFields, listResetKey = 0, o
             style={[dS.input, dS.inputMemo]}
             value={form.memo ?? ''}
             onChangeText={v => set('memo', v)}
-            placeholder="自由にメモを残せます"
+            placeholder="自由に企業研究などの情報を残せます"
             placeholderTextColor={C.muted}
             multiline
             textAlignVertical="top"
@@ -2136,6 +2451,14 @@ const dS = StyleSheet.create({
   },
   inputMulti: { minHeight: 72, textAlignVertical: 'top' },
   inputMemo: { minHeight: 100, textAlignVertical: 'top' },
+  passwordRow: { flexDirection: 'row', alignItems: 'center' },
+  passwordInput: { flex: 1, paddingRight: 44 },
+  passwordToggle: {
+    position: 'absolute',
+    right: 0,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
   esHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2604,234 +2927,6 @@ const esS = StyleSheet.create({
   bottomPad: { height: 32 },
 });
 
-// ─── InterviewSheetScreen（面接ノート） ───────────────────────────────────────
-
-interface InterviewQAItemProps {
-  item: InterviewQA;
-  index: number;
-  questionPlaceholder: string;
-  memoPlaceholder: string;
-  onUpdate: (item: InterviewQA) => void;
-  onDelete: () => void;
-}
-
-function InterviewQAItemView({ item, index, questionPlaceholder, memoPlaceholder, onUpdate, onDelete }: InterviewQAItemProps) {
-  return (
-    <View style={iqS.card}>
-      <View style={iqS.headerRow}>
-        <View style={iqS.indexBadge}>
-          <Text style={iqS.indexBadgeText}>Q{index + 1}</Text>
-        </View>
-        <TouchableOpacity onPress={onDelete} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Text style={iqS.deleteText}>削除</Text>
-        </TouchableOpacity>
-      </View>
-      <Text style={iqS.label}>質問</Text>
-      <TextInput
-        style={iqS.input}
-        value={item.question}
-        onChangeText={v => onUpdate({ ...item, question: v })}
-        placeholder={questionPlaceholder}
-        placeholderTextColor={C.muted}
-        multiline
-        textAlignVertical="top"
-      />
-      <Text style={iqS.label}>メモ</Text>
-      <TextInput
-        style={[iqS.input, iqS.inputMemo]}
-        value={item.memo}
-        onChangeText={v => onUpdate({ ...item, memo: v })}
-        placeholder={memoPlaceholder}
-        placeholderTextColor={C.muted}
-        multiline
-        textAlignVertical="top"
-      />
-    </View>
-  );
-}
-
-const iqS = StyleSheet.create({
-  card: {
-    backgroundColor: '#F8F8F8',
-    borderRadius: 10,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: C.border,
-    padding: 12,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  indexBadge: {
-    backgroundColor: C.primary,
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  indexBadgeText: { color: C.card, fontSize: 12, fontWeight: 'bold' },
-  deleteText: { color: C.danger, fontSize: 13 },
-  label: { fontSize: 12, color: C.sub, marginTop: 10, marginBottom: 4 },
-  input: {
-    borderWidth: 1,
-    borderColor: C.border,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: C.text,
-    backgroundColor: C.card,
-    minHeight: 44,
-  },
-  inputMemo: { minHeight: 72, lineHeight: 20 },
-});
-
-type InterviewSection = 'reverseQuestions' | 'askedQuestions';
-
-interface InterviewSheetScreenProps {
-  sheet: InterviewSheet;
-  isNew: boolean;
-  companyName: string;
-  listResetKey?: number;
-  onSave: (s: InterviewSheet) => void;
-  onDelete: () => void;
-  onBack: () => void;
-  onListReset?: () => void;
-}
-
-function InterviewSheetScreen({ sheet, isNew, companyName, listResetKey = 0, onSave, onDelete, onBack, onListReset }: InterviewSheetScreenProps) {
-  const [form, setForm] = useState<InterviewSheet>(sheet);
-  const originalRef = useRef(JSON.stringify(sheet));
-  const listResetKeyRef = useRef(listResetKey);
-
-  const isDirty = useCallback(() => JSON.stringify(form) !== originalRef.current, [form]);
-
-  const confirmLeave = useCallback((next: () => void) => {
-    if (isDirty()) {
-      Alert.alert('変更を破棄しますか？', '保存されていない変更は失われます。', [
-        { text: '続けて編集', style: 'cancel' },
-        { text: '破棄して戻る', style: 'destructive', onPress: next },
-      ]);
-    } else {
-      next();
-    }
-  }, [isDirty]);
-
-  const handleBack = useCallback(() => {
-    confirmLeave(onBack);
-  }, [confirmLeave, onBack]);
-
-  useEffect(() => {
-    if (listResetKeyRef.current === listResetKey) { return; }
-    listResetKeyRef.current = listResetKey;
-    confirmLeave(onListReset ?? onBack);
-  }, [listResetKey, confirmLeave, onBack, onListReset]);
-
-  const handleSave = () => {
-    const updated: InterviewSheet = { ...form, updatedAt: nowISO() };
-    onSave(updated);
-    originalRef.current = JSON.stringify(updated);
-    onBack();
-  };
-
-  const handleDelete = () => {
-    Alert.alert('面接ノートを削除', '削除すると元に戻せません。', [
-      { text: 'キャンセル', style: 'cancel' },
-      { text: '削除', style: 'destructive', onPress: () => { onDelete(); onBack(); } },
-    ]);
-  };
-
-  const addItem = (section: InterviewSection) =>
-    setForm(f => ({ ...f, [section]: [...f[section], makeEmptyInterviewQA()] }));
-
-  const updateItem = (section: InterviewSection, id: string, item: InterviewQA) =>
-    setForm(f => ({ ...f, [section]: f[section].map(q => q.id === id ? item : q) }));
-
-  const deleteItem = (section: InterviewSection, id: string) => {
-    Alert.alert('質問を削除', 'この質問とメモを削除しますか？', [
-      { text: 'キャンセル', style: 'cancel' },
-      { text: '削除', style: 'destructive', onPress: () =>
-        setForm(f => ({ ...f, [section]: f[section].filter(q => q.id !== id) }))
-      },
-    ]);
-  };
-
-  return (
-    <View style={esS.root}>
-      <View style={esS.navBar}>
-        <TouchableOpacity onPress={handleBack} style={esS.navBack}>
-          <Text style={esS.navBackText}>＜ 戻る</Text>
-        </TouchableOpacity>
-        <Text style={esS.navTitle} numberOfLines={1}>
-          {companyName ? `${companyName}の面接ノート` : '面接ノート'}
-        </Text>
-        <TouchableOpacity onPress={handleSave} style={esS.navSave}>
-          <Text style={esS.navSaveText}>保存</Text>
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView style={esS.scroll} contentContainerStyle={esS.scrollContent} keyboardShouldPersistTaps="handled">
-        <Text style={esS.sectionTitle}>逆質問の準備</Text>
-        <Text style={ivS.sectionDesc}>
-          面接の最後に自分から聞く質問を準備しておきましょう。意図や聞くタイミングをメモに残せます。
-        </Text>
-        {form.reverseQuestions.length === 0 && (
-          <Text style={esS.emptyQA}>逆質問はまだありません。</Text>
-        )}
-        {form.reverseQuestions.map((item, i) => (
-          <InterviewQAItemView
-            key={item.id}
-            item={item}
-            index={i}
-            questionPlaceholder="例：入社までに勉強しておくべきことはありますか？"
-            memoPlaceholder="質問の意図、どの面接で使うか など"
-            onUpdate={updated => updateItem('reverseQuestions', item.id, updated)}
-            onDelete={() => deleteItem('reverseQuestions', item.id)}
-          />
-        ))}
-        <TouchableOpacity style={esS.addQABtn} onPress={() => addItem('reverseQuestions')}>
-          <Text style={esS.addQABtnText}>＋ 逆質問を追加</Text>
-        </TouchableOpacity>
-
-        <Text style={esS.sectionTitle}>聞かれた質問の記録</Text>
-        <Text style={ivS.sectionDesc}>
-          面接で実際に聞かれた質問と自分の回答・手応えを記録して、次の面接に活かしましょう。
-        </Text>
-        {form.askedQuestions.length === 0 && (
-          <Text style={esS.emptyQA}>記録はまだありません。</Text>
-        )}
-        {form.askedQuestions.map((item, i) => (
-          <InterviewQAItemView
-            key={item.id}
-            item={item}
-            index={i}
-            questionPlaceholder="例：学生時代に最も力を入れたことは？"
-            memoPlaceholder="自分の回答、手応え、次はこう答えたい など"
-            onUpdate={updated => updateItem('askedQuestions', item.id, updated)}
-            onDelete={() => deleteItem('askedQuestions', item.id)}
-          />
-        ))}
-        <TouchableOpacity style={esS.addQABtn} onPress={() => addItem('askedQuestions')}>
-          <Text style={esS.addQABtnText}>＋ 聞かれた質問を追加</Text>
-        </TouchableOpacity>
-
-        {!isNew && (
-          <TouchableOpacity style={esS.deleteBtn} onPress={handleDelete}>
-            <Text style={esS.deleteBtnText}>この面接ノートを削除する</Text>
-          </TouchableOpacity>
-        )}
-
-        <View style={esS.bottomPad} />
-      </ScrollView>
-    </View>
-  );
-}
-
-const ivS = StyleSheet.create({
-  sectionDesc: { fontSize: 12, color: C.sub, marginBottom: 8, lineHeight: 18 },
-});
-
 // ─── JobManagementScreen (root) ───────────────────────────────────────────────
 
 type ViewState =
@@ -2839,8 +2934,7 @@ type ViewState =
   | { mode: 'view'; companyId: string }
   | { mode: 'detail'; companyId: string }
   | { mode: 'new'; draft: Company }
-  | { mode: 'es'; companyId: string; draft: ESItem }
-  | { mode: 'interview'; companyId: string; draft: InterviewSheet };
+  | { mode: 'es'; companyId: string; draft: ESItem };
 
 interface JobManagementScreenProps {
   listResetKey?: number;
@@ -2894,7 +2988,7 @@ function JobManagementScreen({ listResetKey = 0 }: JobManagementScreenProps) {
       Promise.all([
         AsyncStorage.getItem(STORAGE_KEY),
         AsyncStorage.getItem(GLOBAL_FIELDS_KEY),
-      ]).then(([cJson, fJson]) => {
+      ]).then(async ([cJson, fJson]) => {
         let loaded: Company[] = [];
         try {
           loaded = cJson ? JSON.parse(cJson) : [];
@@ -2911,18 +3005,19 @@ function JobManagementScreen({ listResetKey = 0 }: JobManagementScreenProps) {
           fields = [];
           AsyncStorage.removeItem(GLOBAL_FIELDS_KEY).catch(err => console.warn('Failed to remove corrupt storage:', err));
         }
-        if (loaded.length) setCompanies(loaded);
+        const merged = await Promise.all(loaded.map(withKeychainPassword));
+        if (merged.length) setCompanies(merged);
         if (fields.length) setGlobalFields(fields);
         // Re-sync all notifications in case reminder days changed in Settings
-        loaded.forEach(c => syncNotifications(c));
+        merged.forEach(c => syncNotifications(c));
       }).catch(() => {});
     } else {
       Promise.all([
         getDocs(collection(db, 'users', uid, 'job_companies')),
         getDoc(doc(db, 'users', uid, 'job_settings', 'global_fields')),
-      ]).then(([snap, fSnap]) => {
-        const loaded = snap.docs.map(d => {
-          const data = d.data() as Partial<Company> & { entrySheets?: unknown[] };
+      ]).then(async ([snap, fSnap]) => {
+        const mapped = snap.docs.map(d => {
+          const data = d.data() as Partial<Company> & { entrySheets?: unknown[]; interviewSheet?: unknown };
           // 旧フォーマット移行: entrySheets配列の先頭をentrySheetに
           let entrySheet: ESItem | null = null;
           if (isPlainObject(data.entrySheet)) {
@@ -2935,19 +3030,23 @@ function JobManagementScreen({ listResetKey = 0 }: JobManagementScreenProps) {
             name: data.name ?? '',
             myPageUrl: data.myPageUrl ?? '',
             myPageLoginId: data.myPageLoginId ?? '',
+            myPageLoginPassword: data.myPageLoginPassword ?? '',
             currentGoal: data.currentGoal ?? '',
             selectionStatus: data.selectionStatus ?? '',
             desireLevel: data.desireLevel ?? '',
             tasks: Array.isArray(data.tasks) ? data.tasks : [],
+            // 旧「面接ノート」のデータは面接記録に変換して引き継ぐ
+            interviews: Array.isArray(data.interviews) && data.interviews.length > 0
+              ? data.interviews.map(normalizeInterview)
+              : migrateInterviewSheetToRecords(data.interviewSheet),
             globalFieldValues: isPlainObject(data.globalFieldValues) ? toStringRecord(data.globalFieldValues) : {},
             memo: data.memo ?? '',
             entrySheet,
-            interviewSheet: normalizeInterviewSheet(data.interviewSheet),
-            progressXp: typeof data.progressXp === 'number' ? data.progressXp : undefined,
             nextInterviewDate: typeof data.nextInterviewDate === 'string' ? data.nextInterviewDate : '',
             nextInterviewTime: typeof data.nextInterviewTime === 'string' ? data.nextInterviewTime : '',
           } as Company;
         });
+        const loaded = await Promise.all(mapped.map(withKeychainPassword));
         setCompanies(loaded);
         if (fSnap.exists()) setGlobalFields(fSnap.data().fields ?? []);
         // Re-sync all notifications in case reminder days changed in Settings
@@ -2965,35 +3064,37 @@ function JobManagementScreen({ listResetKey = 0 }: JobManagementScreenProps) {
   }, [listResetKey]);
 
   // 企業を保存（追加・更新）
+  // パスワードはキーチェーンにのみ保存し、Firestore/AsyncStorageへは書かない
   const saveCompany = useCallback((company: Company) => {
-    const existingCompany = companies.find(c => c.id === company.id);
-    const nextCompany = withUpdatedCompanyProgress({
-      ...company,
-      progressXp: Math.max(company.progressXp ?? 0, existingCompany?.progressXp ?? 0),
-    });
+    saveMyPagePassword(company.id, company.myPageLoginPassword ?? '').catch(() => {});
     setCompanies(prev => {
-      const next = prev.find(c => c.id === nextCompany.id)
-        ? prev.map(c => c.id === nextCompany.id ? nextCompany : c)
-        : [...prev, nextCompany];
-      if (isDemo) AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => {});
+      const next = prev.find(c => c.id === company.id)
+        ? prev.map(c => c.id === company.id ? company : c)
+        : [...prev, company];
+      if (isDemo) {
+        AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next.map(withoutPassword))).catch(() => {});
+      }
       return next;
     });
     if (!isDemo && uid) {
-      setDoc(doc(db, 'users', uid, 'job_companies', nextCompany.id), nextCompany).catch(() => {});
+      setDoc(doc(db, 'users', uid, 'job_companies', company.id), withoutPassword(company)).catch(() => {});
     }
-    syncNotifications(nextCompany);
-  }, [uid, isDemo, companies, syncNotifications]);
+    syncNotifications(company);
+  }, [uid, isDemo, syncNotifications]);
 
   // 企業を削除
   const removeCompany = useCallback((companyId: string, tasks: Task[]) => {
     setCompanies(prev => {
       const next = prev.filter(c => c.id !== companyId);
-      if (isDemo) AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => {});
+      if (isDemo) {
+        AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next.map(withoutPassword))).catch(() => {});
+      }
       return next;
     });
     if (!isDemo && uid) {
       deleteDoc(doc(db, 'users', uid, 'job_companies', companyId)).catch(() => {});
     }
+    deleteMyPagePassword(companyId).catch(() => {});
     tasks.forEach(t => cancelTaskNotification(t.id).catch(() => {}));
     cancelInterviewEveNotification(companyId).catch(() => {});
   }, [uid, isDemo]);
@@ -3041,27 +3142,6 @@ function JobManagementScreen({ listResetKey = 0 }: JobManagementScreenProps) {
     );
   }
 
-  if (view.mode === 'interview') {
-    const company = companies.find(c => c.id === view.companyId);
-    if (!company) return <View style={s.loadingContainer}><ActivityIndicator color={C.primary} /></View>;
-    return (
-      <InterviewSheetScreen
-        sheet={view.draft}
-        isNew={!company.interviewSheet}
-        companyName={company.name}
-        listResetKey={listResetKey}
-        onSave={(updated) => {
-          saveCompany({ ...company, interviewSheet: updated });
-        }}
-        onDelete={() => {
-          saveCompany({ ...company, interviewSheet: null });
-        }}
-        onBack={() => setView({ mode: 'view', companyId: view.companyId })}
-        onListReset={() => setView({ mode: 'list' })}
-      />
-    );
-  }
-
   if (view.mode === 'view') {
     const company = companies.find(c => c.id === view.companyId);
     if (!company) return <View style={s.loadingContainer}><ActivityIndicator color={C.primary} /></View>;
@@ -3081,10 +3161,6 @@ function JobManagementScreen({ listResetKey = 0 }: JobManagementScreenProps) {
         onNavigateToES={() => {
           const draft = company.entrySheet ?? makeEmptyES();
           setView({ mode: 'es', companyId: view.companyId, draft });
-        }}
-        onNavigateToInterview={() => {
-          const draft = company.interviewSheet ?? makeEmptyInterviewSheet();
-          setView({ mode: 'interview', companyId: view.companyId, draft });
         }}
       />
     );
@@ -3120,10 +3196,6 @@ function JobManagementScreen({ listResetKey = 0 }: JobManagementScreenProps) {
         onNavigateToES={(updatedCompany) => {
           const draft = updatedCompany.entrySheet ?? makeEmptyES();
           setView({ mode: 'es', companyId: view.companyId, draft });
-        }}
-        onNavigateToInterview={(updatedCompany) => {
-          const draft = updatedCompany.interviewSheet ?? makeEmptyInterviewSheet();
-          setView({ mode: 'interview', companyId: view.companyId, draft });
         }}
         onBack={() => setView({ mode: 'list' })}
       />
