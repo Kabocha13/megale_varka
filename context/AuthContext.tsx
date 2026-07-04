@@ -1,13 +1,19 @@
 import {
   createUserWithEmailAndPassword,
+  GoogleAuthProvider,
+  OAuthProvider,
   onAuthStateChanged,
   sendPasswordResetEmail,
+  signInWithCredential,
   signInWithEmailAndPassword,
   signOut,
   User,
 } from 'firebase/auth';
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { DEMO_MODE } from '@env';
+import { Platform } from 'react-native';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import { appleAuth } from '@invertase/react-native-apple-authentication';
+import { DEMO_MODE, GOOGLE_WEB_CLIENT_ID } from '@env';
 import { auth } from '../firebase/config';
 
 const isDemoMode = DEMO_MODE === 'true';
@@ -20,6 +26,8 @@ type AuthContextType = {
   email: string | null;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
+  loginWithApple: () => Promise<void>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
 };
@@ -46,6 +54,10 @@ function getErrorMessage(code: string): string {
       return 'メールアドレスの形式が正しくありません。';
     case 'auth/too-many-requests':
       return 'しばらく経ってから再度お試しください。';
+    case 'auth/account-exists-with-different-credential':
+      return 'このメールアドレスは別のログイン方法で登録されています。';
+    case 'auth/operation-not-allowed':
+      return 'このログイン方法は現在利用できません。Firebaseの設定を確認してください。';
     default:
       return 'エラーが発生しました。再度お試しください。';
   }
@@ -81,6 +93,16 @@ async function demoResetPassword(inputEmail: string): Promise<void> {
   if (!isValidEmail(inputEmail)) {
     throw new Error('メールアドレスの形式が正しくありません。');
   }
+}
+
+// ---- ソーシャルログイン ----
+
+let googleConfigured = false;
+
+function ensureGoogleConfigured(): void {
+  if (googleConfigured) return;
+  GoogleSignin.configure({ webClientId: GOOGLE_WEB_CLIENT_ID });
+  googleConfigured = true;
 }
 
 // ---- Provider ----
@@ -131,6 +153,74 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  async function loginWithGoogle(): Promise<void> {
+    if (isDemoMode) {
+      await demoDelay();
+      setDemoEmail('demo-google@example.com');
+      setDemoLoggedIn(true);
+      return;
+    }
+    ensureGoogleConfigured();
+    try {
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+    } catch {
+      throw new Error('Google Play開発者サービスが利用できません。');
+    }
+    const result = await GoogleSignin.signIn();
+    if (result.type !== 'success') {
+      return; // ユーザーがキャンセルした場合は何もしない
+    }
+    const idToken = result.data.idToken;
+    if (!idToken) {
+      throw new Error('Googleの認証情報を取得できませんでした。再度お試しください。');
+    }
+    try {
+      await signInWithCredential(auth, GoogleAuthProvider.credential(idToken));
+    } catch (error: unknown) {
+      const code = (error as { code?: string }).code ?? '';
+      throw new Error(getErrorMessage(code));
+    }
+  }
+
+  async function loginWithApple(): Promise<void> {
+    if (isDemoMode) {
+      await demoDelay();
+      setDemoEmail('demo-apple@example.com');
+      setDemoLoggedIn(true);
+      return;
+    }
+    if (Platform.OS !== 'ios') {
+      throw new Error('AppleでのログインはiOSでのみ利用できます。');
+    }
+    let identityToken: string | null = null;
+    let rawNonce: string | undefined;
+    try {
+      const response = await appleAuth.performRequest({
+        requestedOperation: appleAuth.Operation.LOGIN,
+        requestedScopes: [appleAuth.Scope.FULL_NAME, appleAuth.Scope.EMAIL],
+      });
+      identityToken = response.identityToken;
+      rawNonce = response.nonce;
+    } catch (error: unknown) {
+      const code = (error as { code?: string }).code ?? '';
+      if (code === appleAuth.Error.CANCELED) {
+        return; // ユーザーがキャンセルした場合は何もしない
+      }
+      throw new Error('Appleでのログインに失敗しました。再度お試しください。');
+    }
+    if (!identityToken) {
+      throw new Error('Appleの認証情報を取得できませんでした。再度お試しください。');
+    }
+    const provider = new OAuthProvider('apple.com');
+    const credential = provider.credential({ idToken: identityToken, rawNonce });
+    try {
+      await signInWithCredential(auth, credential);
+    } catch (error: unknown) {
+      const code = (error as { code?: string }).code ?? '';
+      throw new Error(getErrorMessage(code));
+    }
+  }
+
   async function logout(): Promise<void> {
     if (isDemoMode || demoLoggedIn) {
       setDemoLoggedIn(false);
@@ -167,6 +257,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         email,
         login,
         register,
+        loginWithGoogle,
+        loginWithApple,
         logout,
         resetPassword,
       }}

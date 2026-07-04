@@ -17,6 +17,8 @@ import {
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { hasRequestedHealthKit, isHealthKitAvailable } from '../services/healthService';
+import { getGraduationYear, graduationYearOptions, saveGraduationYear } from '../services/profile';
+import { gradYearShortLabel } from '../services/jobSupport';
 import {
   DEFAULT_DAILY_REMINDER,
   DEFAULT_REMINDER_DAYS,
@@ -79,6 +81,8 @@ export default function SettingsScreen() {
   const [draft, setDraft] = useState<number[]>(DEFAULT_REMINDER_DAYS);
   const [perms, setPerms] = useState<PermState>({ notification: 'loading', healthKit: 'loading' });
   const [dailyReminder, setDailyReminder] = useState<DailyReminderConfig>(DEFAULT_DAILY_REMINDER);
+  const [graduationYear, setGraduationYear] = useState<number | null>(null);
+  const [showGradPicker, setShowGradPicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [pickerDate, setPickerDate] = useState<Date>(() => {
     const d = new Date();
@@ -103,6 +107,8 @@ export default function SettingsScreen() {
       d.setHours(config.hour, config.minute, 0, 0);
       setPickerDate(d);
     }).catch(() => {});
+
+    getGraduationYear().then(setGraduationYear).catch(() => {});
 
     refreshPerms();
 
@@ -177,6 +183,12 @@ export default function SettingsScreen() {
   };
 
   const timeLabel = `${String(dailyReminder.hour).padStart(2, '0')}:${String(dailyReminder.minute).padStart(2, '0')}`;
+
+  const handleSelectGradYear = async (year: number | null) => {
+    setGraduationYear(year);
+    setShowGradPicker(false);
+    await saveGraduationYear(year).catch(() => {});
+  };
 
   const handleLogoutPress = async () => {
     try {
@@ -259,6 +271,25 @@ export default function SettingsScreen() {
         </View>
       </View>
 
+      {/* 就活プロフィール */}
+      <Text style={s.sectionTitle}>就活プロフィール</Text>
+      <View style={s.card}>
+        <View style={s.row}>
+          <View style={s.rowLeft}>
+            <Text style={s.rowLabel}>卒業年度</Text>
+            <Text style={s.rowSub}>就活スケジュールに合わせたアドバイスに使われます</Text>
+          </View>
+          <TouchableOpacity style={s.valueBtn} onPress={() => setShowGradPicker(true)}>
+            <Text style={s.valueBtnText} numberOfLines={1}>
+              {graduationYear !== null
+                ? `${graduationYear}年3月卒（${gradYearShortLabel(graduationYear)}）`
+                : '未設定'}
+            </Text>
+            <Text style={s.arrow}>▼</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
       {/* 相談窓口 */}
       <Text style={s.sectionTitle}>相談窓口</Text>
       <View style={s.card}>
@@ -325,6 +356,38 @@ export default function SettingsScreen() {
               </TouchableOpacity>
               <TouchableOpacity style={s.pickerConfirmBtn} onPress={handleIOSConfirm}>
                 <Text style={s.pickerConfirmText}>完了</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 卒業年度ピッカー */}
+      <Modal visible={showGradPicker} transparent animationType="fade" onRequestClose={() => setShowGradPicker(false)}>
+        <View style={s.overlay}>
+          <View style={s.pickerSheet}>
+            <Text style={s.pickerTitle}>卒業年度</Text>
+            <Text style={s.pickerSub}>3月に卒業する年を選んでください</Text>
+            {[null, ...graduationYearOptions()].map(year => {
+              const selected = graduationYear === year;
+              return (
+                <TouchableOpacity
+                  key={year ?? 'none'}
+                  style={[s.pickerOption, selected && s.pickerOptionSelected]}
+                  onPress={() => handleSelectGradYear(year)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected }}
+                >
+                  <Text style={[s.pickerOptionText, selected && s.pickerOptionTextSelected]}>
+                    {year !== null ? `${year}年3月卒（${gradYearShortLabel(year)}）` : '未設定'}
+                  </Text>
+                  {selected && <Text style={s.pickerOptionTextSelected}>✓</Text>}
+                </TouchableOpacity>
+              );
+            })}
+            <View style={s.pickerActions}>
+              <TouchableOpacity style={s.pickerCancelBtn} onPress={() => setShowGradPicker(false)}>
+                <Text style={s.pickerCancelText}>キャンセル</Text>
               </TouchableOpacity>
             </View>
           </View>

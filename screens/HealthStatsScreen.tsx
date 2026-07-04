@@ -71,6 +71,20 @@ function buildSymptomFrequencies(
     .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label, 'ja'));
 }
 
+function buildAppetiteCounts(records: HealthStats['records']): Record<AppetiteValue, number> {
+  const counts: Record<AppetiteValue, number> = {
+    nothing: 0, water: 0, noodles: 0, set_meal: 0, steak: 0,
+  };
+
+  records.forEach(record => {
+    if (record.appetite && counts[record.appetite] !== undefined) {
+      counts[record.appetite] += 1;
+    }
+  });
+
+  return counts;
+}
+
 function avg(nums: number[]): number | null {
   if (nums.length === 0) { return null; }
   return nums.reduce((sum, n) => sum + n, 0) / nums.length;
@@ -119,17 +133,18 @@ export default function HealthStatsScreen({ uid, onEdit }: Props) {
       : null,
   }));
 
+  const recordsInWindow = windowed
+    .map(w => w.record)
+    .filter((record): record is HealthStats['records'][number] => Boolean(record));
+  const appetiteCountsInWindow = buildAppetiteCounts(recordsInWindow);
   const appetiteStack: StackSegment[] = (Object.keys(APPETITE_META) as AppetiteValue[]).map(k => ({
     label: APPETITE_META[k].label,
     iconName: APPETITE_META[k].iconName,
     color: APPETITE_META[k].color,
-    value: stats.appetiteCounts[k],
+    value: appetiteCountsInWindow[k],
   }));
 
   const alcoholInWindow = windowed.filter(w => w.record?.alcohol === true).length;
-  const recordsInWindow = windowed
-    .map(w => w.record)
-    .filter((record): record is HealthStats['records'][number] => Boolean(record));
   const avgMoodInWindow = avg(
     recordsInWindow
       .map(record => record.mood)
@@ -153,7 +168,7 @@ export default function HealthStatsScreen({ uid, onEdit }: Props) {
           <Text style={s.title}>健康統計</Text>
           <View style={s.streakBadge}>
             <MaterialIcons name="local-fire-department" size={21} color="#E36F2C" />
-            <Text style={s.streakText}>継続記録 {stats.streak}日</Text>
+            <Text style={s.streakText}>記録 {stats.totalDays}日</Text>
           </View>
         </View>
         {onEdit && (
@@ -229,7 +244,7 @@ export default function HealthStatsScreen({ uid, onEdit }: Props) {
       </View>
 
       {/* Appetite stacked bar */}
-      <Text style={s.sectionTitle}>食欲の分布(30日間)</Text>
+      <Text style={s.sectionTitle}>食欲の分布({windowDays}日間)</Text>
       <View style={s.card}>
         <StackedBar data={appetiteStack} />
       </View>

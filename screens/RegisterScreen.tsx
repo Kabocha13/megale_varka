@@ -25,6 +25,13 @@ function RegisterScreen({ onNavigateToLogin }: Props) {
       Alert.alert('エラー', 'メールアドレスとパスワードを入力してください。');
       return;
     }
+    if (password.length < 6) {
+      Alert.alert(
+        'パスワードが短すぎます',
+        'パスワードは6文字以上で入力してください。',
+      );
+      return;
+    }
     setSubmitting(true);
     try {
       await register(email, password);
@@ -58,6 +65,11 @@ function RegisterScreen({ onNavigateToLogin }: Props) {
         secureTextEntry
         editable={!submitting}
       />
+
+      <Text style={[styles.passwordHint, password.length > 0 && password.length < 6 && styles.passwordHintError]}>
+        パスワードは6文字以上で入力してください
+        {password.length > 0 && password.length < 6 ? `（あと${6 - password.length}文字）` : ''}
+      </Text>
 
       <TouchableOpacity
         style={[styles.button, submitting && styles.buttonDisabled]}
@@ -101,6 +113,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     fontSize: 16,
     marginBottom: 16,
+  },
+  passwordHint: {
+    width: '100%',
+    fontSize: 12,
+    color: '#888888',
+    marginTop: -8,
+    marginBottom: 8,
+  },
+  passwordHintError: {
+    color: '#E53935',
   },
   button: {
     width: '100%',
