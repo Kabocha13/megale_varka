@@ -36,6 +36,11 @@ import {
   scheduleTaskNotification,
 } from '../services/notifications';
 import { JOB_COMPANIES_STORAGE_KEY } from '../services/jobSearchProgress';
+import {
+  deleteMyPagePassword,
+  getMyPagePassword,
+  saveMyPagePassword,
+} from '../services/securePasswords';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -261,6 +266,26 @@ function normalizeInterview(data: unknown): InterviewRecord {
     date: typeof d.date === 'string' ? d.date : '',
     note: typeof d.note === 'string' ? d.note : '',
   };
+}
+
+// キーチェーンからパスワードを取り込む。旧形式（Firestore/AsyncStorageに平文で
+// 保存されていた場合）はキーチェーンへ移行し、次回保存時に平文が消える。
+async function withKeychainPassword(company: Company): Promise<Company> {
+  const stored = await getMyPagePassword(company.id);
+  if (stored) {
+    return { ...company, myPageLoginPassword: stored };
+  }
+  if (company.myPageLoginPassword) {
+    await saveMyPagePassword(company.id, company.myPageLoginPassword).catch(() => {});
+  }
+  return company;
+}
+
+// 永続化データからパスワードを除外する（キーチェーンにのみ保存する）
+function withoutPassword(company: Company): Omit<Company, 'myPageLoginPassword'> {
+  const rest: Partial<Company> = { ...company };
+  delete rest.myPageLoginPassword;
+  return rest as Omit<Company, 'myPageLoginPassword'>;
 }
 
 function normalizeQA(data: unknown): ESQAItem {
@@ -2928,7 +2953,7 @@ function JobManagementScreen({ listResetKey = 0 }: JobManagementScreenProps) {
       Promise.all([
         AsyncStorage.getItem(STORAGE_KEY),
         AsyncStorage.getItem(GLOBAL_FIELDS_KEY),
-      ]).then(([cJson, fJson]) => {
+      ]).then(async ([cJson, fJson]) => {
         let loaded: Company[] = [];
         try {
           loaded = cJson ? JSON.parse(cJson) : [];
@@ -2945,17 +2970,18 @@ function JobManagementScreen({ listResetKey = 0 }: JobManagementScreenProps) {
           fields = [];
           AsyncStorage.removeItem(GLOBAL_FIELDS_KEY).catch(err => console.warn('Failed to remove corrupt storage:', err));
         }
-        if (loaded.length) setCompanies(loaded);
+        const merged = await Promise.all(loaded.map(withKeychainPassword));
+        if (merged.length) setCompanies(merged);
         if (fields.length) setGlobalFields(fields);
         // Re-sync all notifications in case reminder days changed in Settings
-        loaded.forEach(c => syncNotifications(c));
+        merged.forEach(c => syncNotifications(c));
       }).catch(() => {});
     } else {
       Promise.all([
         getDocs(collection(db, 'users', uid, 'job_companies')),
         getDoc(doc(db, 'users', uid, 'job_settings', 'global_fields')),
-      ]).then(([snap, fSnap]) => {
-        const loaded = snap.docs.map(d => {
+      ]).then(async ([snap, fSnap]) => {
+        const mapped = snap.docs.map(d => {
           const data = d.data() as Partial<Company> & { entrySheets?: unknown[]; interviewSheet?: unknown };
           // 旧フォーマット移行: entrySheets配列の先頭をentrySheetに
           let entrySheet: ESItem | null = null;
@@ -2985,6 +3011,7 @@ function JobManagementScreen({ listResetKey = 0 }: JobManagementScreenProps) {
             nextInterviewTime: typeof data.nextInterviewTime === 'string' ? data.nextInterviewTime : '',
           } as Company;
         });
+        const loaded = await Promise.all(mapped.map(withKeychainPassword));
         setCompanies(loaded);
         if (fSnap.exists()) setGlobalFields(fSnap.data().fields ?? []);
         // Re-sync all notifications in case reminder days changed in Settings
@@ -3002,16 +3029,20 @@ function JobManagementScreen({ listResetKey = 0 }: JobManagementScreenProps) {
   }, [listResetKey]);
 
   // 企業を保存（追加・更新）
+  // パスワードはキーチェーンにのみ保存し、Firestore/AsyncStorageへは書かない
   const saveCompany = useCallback((company: Company) => {
+    saveMyPagePassword(company.id, company.myPageLoginPassword ?? '').catch(() => {});
     setCompanies(prev => {
       const next = prev.find(c => c.id === company.id)
         ? prev.map(c => c.id === company.id ? company : c)
         : [...prev, company];
-      if (isDemo) AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => {});
+      if (isDemo) {
+        AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next.map(withoutPassword))).catch(() => {});
+      }
       return next;
     });
     if (!isDemo && uid) {
-      setDoc(doc(db, 'users', uid, 'job_companies', company.id), company).catch(() => {});
+      setDoc(doc(db, 'users', uid, 'job_companies', company.id), withoutPassword(company)).catch(() => {});
     }
     syncNotifications(company);
   }, [uid, isDemo, syncNotifications]);
@@ -3020,12 +3051,15 @@ function JobManagementScreen({ listResetKey = 0 }: JobManagementScreenProps) {
   const removeCompany = useCallback((companyId: string, tasks: Task[]) => {
     setCompanies(prev => {
       const next = prev.filter(c => c.id !== companyId);
-      if (isDemo) AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => {});
+      if (isDemo) {
+        AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next.map(withoutPassword))).catch(() => {});
+      }
       return next;
     });
     if (!isDemo && uid) {
       deleteDoc(doc(db, 'users', uid, 'job_companies', companyId)).catch(() => {});
     }
+    deleteMyPagePassword(companyId).catch(() => {});
     tasks.forEach(t => cancelTaskNotification(t.id).catch(() => {}));
     cancelInterviewEveNotification(companyId).catch(() => {});
   }, [uid, isDemo]);
