@@ -584,6 +584,12 @@ function openUrl(url: string): void {
   });
 }
 
+function copyValue(label: string, value: string): void {
+  if (!value) return;
+  Clipboard.setString(value);
+  Alert.alert('コピーしました', `${label}をクリップボードにコピーしました。`);
+}
+
 function parseDate(s: string): Date {
   if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date();
   const [y, m, d] = s.split('-').map(Number);
@@ -1294,8 +1300,8 @@ function CompanyViewScreen({ company, globalFields, onEdit, onBack, onToggleTask
         <View style={vS.section}>
           <Text style={vS.sectionTitle}>基本情報</Text>
           <View style={vS.card}>
-            <ViewRow label="マイページURL" value={company.myPageUrl} isUrl />
-            <ViewRow label="ログインID" value={company.myPageLoginId} />
+            <ViewRow label="マイページURL" value={company.myPageUrl} isUrl copyLabel="マイページURL" />
+            <ViewRow label="ログインID" value={company.myPageLoginId} copyLabel="ログインID" />
             <PasswordViewRow label="パスワード" value={company.myPageLoginPassword ?? ''} />
             <ViewRow
               label="次回面接"
@@ -1439,27 +1445,55 @@ function ViewRow({
   label,
   value,
   isUrl,
+  copyLabel,
   last,
 }: {
   label: string;
   value: string;
   isUrl?: boolean;
+  copyLabel?: string;
   last?: boolean;
 }) {
+  const canCopy = !!copyLabel && !!value;
   return (
     <View style={[vS.row, last && vS.rowLast]}>
       <Text style={vS.rowLabel}>{label}</Text>
       {isUrl && value ? (
-        <TouchableOpacity
-          onPress={() => openUrl(value)}
-          hitSlop={{ top: 4, bottom: 4 }}
-        >
-          <Text style={vS.rowValueLink} numberOfLines={1}>{value}</Text>
-        </TouchableOpacity>
+        <View style={vS.rowValueWrap}>
+          <TouchableOpacity
+            style={vS.rowValuePressable}
+            onPress={() => openUrl(value)}
+            hitSlop={{ top: 4, bottom: 4 }}
+            accessibilityRole="link"
+            accessibilityLabel={`${label}を開く`}
+          >
+            <Text style={vS.rowValueLinkInline} numberOfLines={1}>{value}</Text>
+          </TouchableOpacity>
+          {canCopy && <CopyIconButton label={copyLabel} value={value} />}
+        </View>
+      ) : canCopy ? (
+        <View style={vS.rowValueWrap}>
+          <Text style={vS.rowValueInline} numberOfLines={1}>{value}</Text>
+          <CopyIconButton label={copyLabel} value={value} />
+        </View>
       ) : (
         <Text style={vS.rowValue} numberOfLines={2}>{value || '—'}</Text>
       )}
     </View>
+  );
+}
+
+function CopyIconButton({ label, value }: { label: string; value: string }) {
+  return (
+    <TouchableOpacity
+      style={vS.rowIconButton}
+      onPress={() => copyValue(label, value)}
+      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+      accessibilityRole="button"
+      accessibilityLabel={`${label}をコピー`}
+    >
+      <MaterialIcons name="content-copy" size={18} color={C.sub} />
+    </TouchableOpacity>
   );
 }
 
@@ -1493,17 +1527,7 @@ function PasswordViewRow({
         >
           <MaterialIcons name={visible ? 'visibility-off' : 'visibility'} size={18} color={C.sub} />
         </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => {
-            Clipboard.setString(value);
-            Alert.alert('コピーしました', 'パスワードをクリップボードにコピーしました。');
-          }}
-          hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-          accessibilityRole="button"
-          accessibilityLabel="パスワードをコピー"
-        >
-          <MaterialIcons name="content-copy" size={18} color={C.sub} />
-        </TouchableOpacity>
+        <CopyIconButton label="パスワード" value={value} />
       </View>
     </View>
   );
@@ -1595,9 +1619,20 @@ const vS = StyleSheet.create({
   rowLast: { borderBottomWidth: 0 },
   rowLabel: { fontSize: 13, color: C.sub, flex: 1 },
   rowValue: { fontSize: 14, color: C.text, flex: 2, textAlign: 'right' },
-  rowValueLink: { fontSize: 14, color: C.primary, textDecorationLine: 'underline', flex: 2, textAlign: 'right' },
-  passwordValueWrap: { flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 10 },
-  passwordValueText: { fontSize: 14, color: C.text, flexShrink: 1, textAlign: 'right' },
+  rowValueWrap: { flex: 2, minWidth: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 8 },
+  rowValuePressable: { flexShrink: 1, minWidth: 0 },
+  rowValueInline: { fontSize: 14, color: C.text, flexShrink: 1, minWidth: 0, textAlign: 'right' },
+  rowValueLinkInline: { fontSize: 14, color: C.primary, textDecorationLine: 'underline', textAlign: 'right' },
+  rowIconButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F3F0EC',
+  },
+  passwordValueWrap: { flex: 2, minWidth: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 8 },
+  passwordValueText: { fontSize: 14, color: C.text, flexShrink: 1, minWidth: 0, textAlign: 'right' },
   memoText: { fontSize: 14, color: C.text, paddingHorizontal: 16, paddingVertical: 12, lineHeight: 22 },
   emptyText: { fontSize: 13, color: C.muted, textAlign: 'center', paddingVertical: 8 },
   taskRow: {
