@@ -32,10 +32,6 @@ import {
   requestNotificationPermission,
   scheduleTaskNotification,
 } from '../services/notifications';
-import {
-  JOB_COMPANIES_STORAGE_KEY,
-  withUpdatedCompanyProgress,
-} from '../services/jobSearchProgress';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -54,6 +50,13 @@ interface Task {
   time: string;
   submissionUrl: string;
   completed: boolean;
+}
+
+interface InterviewRecord {
+  id: string;
+  stage: string;   // 一次面接・二次面接など
+  date: string;    // YYYY-MM-DD（未設定は空文字）
+  note: string;    // 聞かれた質問・回答などの自由記述
 }
 
 type ESStatus = '下書き' | '提出済';
@@ -82,10 +85,10 @@ interface Company {
   selectionStatus: string;
   desireLevel: DesireLevel | '';
   tasks: Task[];
+  interviews: InterviewRecord[];
   globalFieldValues: Record<string, string>;
   memo: string;
   entrySheet: ESItem | null;
-  progressXp?: number;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -110,7 +113,7 @@ const SELECTION_STATUS_OPTIONS: string[] = [
   '不合格',
   '選考辞退',
 ];
-const STORAGE_KEY = JOB_COMPANIES_STORAGE_KEY;
+const STORAGE_KEY = '@job_companies_v1';
 const GLOBAL_FIELDS_KEY = '@job_global_fields_v1';
 
 const C = {
@@ -152,6 +155,16 @@ const ES_STATUS_COLOR: Record<ESStatus, string> = {
   '下書き': '#F59E0B',
   '提出済': '#4CAF50',
 };
+
+const INTERVIEW_STAGE_OPTIONS: string[] = [
+  'カジュアル面談',
+  'リクルーター面談',
+  '一次面接',
+  '二次面接',
+  '三次面接',
+  '最終面接',
+  'その他',
+];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -201,9 +214,24 @@ function makeEmptyCompany(): Company {
     selectionStatus: '',
     desireLevel: '',
     tasks: [],
+    interviews: [],
     globalFieldValues: {},
     memo: '',
     entrySheet: null,
+  };
+}
+
+function makeEmptyInterview(): InterviewRecord {
+  return { id: makeUid(), stage: '一次面接', date: '', note: '' };
+}
+
+function normalizeInterview(data: unknown): InterviewRecord {
+  const d = isPlainObject(data) ? data : {};
+  return {
+    id: typeof d.id === 'string' && d.id ? d.id : makeUid(),
+    stage: typeof d.stage === 'string' ? d.stage : '',
+    date: typeof d.date === 'string' ? d.date : '',
+    note: typeof d.note === 'string' ? d.note : '',
   };
 }
 
@@ -572,14 +600,16 @@ const pfS = StyleSheet.create({
 function DatePickerField({
   value,
   onChange,
+  allowPast,
 }: {
   value: string;
   onChange: (v: string) => void;
+  allowPast?: boolean;
 }) {
   const [show, setShow] = useState(false);
   const today = new Date();
   const parsed = value ? parseDate(value) : today;
-  const date = parsed.getTime() < today.getTime() ? today : parsed;
+  const date = !allowPast && parsed.getTime() < today.getTime() ? today : parsed;
 
   const handleChange = (_: DateTimePickerEvent, selected?: Date) => {
     if (Platform.OS === 'android') setShow(false);
@@ -601,7 +631,7 @@ function DatePickerField({
       </TouchableOpacity>
 
       {Platform.OS === 'android' && show && (
-        <DateTimePicker value={date} mode="date" minimumDate={new Date()} onChange={handleChange} />
+        <DateTimePicker value={date} mode="date" minimumDate={allowPast ? undefined : new Date()} onChange={handleChange} />
       )}
       {Platform.OS === 'ios' && (
         <PickerFieldModal visible={show} onDone={() => setShow(false)}>
@@ -609,7 +639,7 @@ function DatePickerField({
             value={date}
             mode="date"
             display="spinner"
-            minimumDate={new Date()}
+            minimumDate={allowPast ? undefined : new Date()}
             onChange={handleChange}
             locale="ja"
             textColor="#000000"
@@ -811,6 +841,144 @@ const tiS = StyleSheet.create({
     color: C.text,
     backgroundColor: C.card,
   },
+  deleteBtn: { marginTop: 12, alignItems: 'center', paddingVertical: 8 },
+  deleteBtnText: { color: C.danger, fontSize: 13 },
+});
+
+// ─── InterviewItem ────────────────────────────────────────────────────────────
+
+interface InterviewItemProps {
+  interview: InterviewRecord;
+  onUpdate: (rec: InterviewRecord) => void;
+  onDelete: () => void;
+}
+
+function InterviewItem({ interview, onUpdate, onDelete }: InterviewItemProps) {
+  const [expanded, setExpanded] = useState(!interview.note);
+  const [showStagePicker, setShowStagePicker] = useState(false);
+
+  return (
+    <View style={ivS.card}>
+      <TouchableOpacity
+        style={ivS.header}
+        onPress={() => setExpanded(e => !e)}
+        activeOpacity={0.7}
+      >
+        <View style={ivS.stageBadge}>
+          <Text style={ivS.stageBadgeText}>{interview.stage || '面接'}</Text>
+        </View>
+        <Text style={ivS.notePreview} numberOfLines={1}>
+          {interview.note || '（記録未入力）'}
+        </Text>
+        {interview.date ? (
+          <Text style={ivS.date}>{displayDate(interview.date)}</Text>
+        ) : null}
+        <Text style={ivS.chevron}>{expanded ? '▲' : '▼'}</Text>
+      </TouchableOpacity>
+
+      {expanded && (
+        <View style={ivS.body}>
+          <Text style={ivS.label}>面接の種類</Text>
+          <TouchableOpacity style={ivS.selectBtn} onPress={() => setShowStagePicker(true)}>
+            <Text style={interview.stage ? ivS.selectValue : ivS.selectPlaceholder}>
+              {interview.stage || '選択してください'}
+            </Text>
+            <Text style={ivS.selectArrow}>▼</Text>
+          </TouchableOpacity>
+
+          <Text style={ivS.label}>実施日（任意）</Text>
+          <DatePickerField
+            value={interview.date}
+            onChange={v => onUpdate({ ...interview, date: v })}
+            allowPast
+          />
+
+          <Text style={ivS.label}>聞かれた質問・回答など（自由記述）</Text>
+          <TextInput
+            style={[ivS.input, ivS.inputNote]}
+            value={interview.note}
+            onChangeText={v => onUpdate({ ...interview, note: v })}
+            placeholder={'覚えている範囲で自由に記録できます。\n例：ガクチカを深掘りされた。逆質問では〇〇を聞いた。'}
+            placeholderTextColor={C.muted}
+            multiline
+            textAlignVertical="top"
+          />
+
+          <TouchableOpacity style={ivS.deleteBtn} onPress={onDelete}>
+            <Text style={ivS.deleteBtnText}>この面接記録を削除</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      <PickerModal
+        visible={showStagePicker}
+        title="面接の種類を選択"
+        options={INTERVIEW_STAGE_OPTIONS}
+        value={interview.stage}
+        onSelect={v => onUpdate({ ...interview, stage: v })}
+        onClose={() => setShowStagePicker(false)}
+      />
+    </View>
+  );
+}
+
+const ivS = StyleSheet.create({
+  card: {
+    backgroundColor: '#F8F8F8',
+    borderRadius: 8,
+    marginBottom: 8,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+  },
+  stageBadge: {
+    backgroundColor: C.primary,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    marginRight: 10,
+  },
+  stageBadgeText: { color: C.card, fontSize: 12, fontWeight: 'bold' },
+  notePreview: { flex: 1, fontSize: 14, color: C.text },
+  date: { fontSize: 12, color: C.light, marginRight: 6 },
+  chevron: { fontSize: 11, color: C.muted },
+  body: {
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+  },
+  label: { fontSize: 12, color: C.sub, marginTop: 10, marginBottom: 4 },
+  input: {
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: C.text,
+    backgroundColor: C.card,
+  },
+  inputNote: { minHeight: 120, textAlignVertical: 'top', lineHeight: 22 },
+  selectBtn: {
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#FAFAFA',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  selectValue: { fontSize: 14, color: C.text },
+  selectPlaceholder: { fontSize: 14, color: C.muted },
+  selectArrow: { fontSize: 11, color: C.muted },
   deleteBtn: { marginTop: 12, alignItems: 'center', paddingVertical: 8 },
   deleteBtnText: { color: C.danger, fontSize: 13 },
 });
@@ -1035,6 +1203,7 @@ function CompanyViewScreen({ company, globalFields, onEdit, onBack, onToggleTask
   const pendingTasks = company.tasks.filter(t => !t.completed);
   const doneTasks = company.tasks.filter(t => t.completed);
   const entrySheet = company.entrySheet ?? null;
+  const interviews = company.interviews ?? [];
 
   return (
     <View style={vS.root}>
@@ -1146,6 +1315,30 @@ function CompanyViewScreen({ company, globalFields, onEdit, onBack, onToggleTask
                   );
                 })
               )}
+            </View>
+          )}
+        </View>
+
+        {/* 面接記録 */}
+        <View style={vS.section}>
+          <Text style={vS.sectionTitle}>面接記録（{interviews.length}件）</Text>
+          {interviews.length === 0 ? (
+            <Text style={vS.emptyText}>面接の記録はまだありません</Text>
+          ) : (
+            <View style={vS.card}>
+              {interviews.map((rec, i) => (
+                <View key={rec.id} style={[ivVS.row, i === interviews.length - 1 && vS.rowLast]}>
+                  <View style={ivVS.rowHeader}>
+                    <View style={ivVS.stageBadge}>
+                      <Text style={ivVS.stageBadgeText}>{rec.stage || '面接'}</Text>
+                    </View>
+                    {rec.date ? (
+                      <Text style={ivVS.date}>{displayDate(rec.date)}</Text>
+                    ) : null}
+                  </View>
+                  <Text style={ivVS.note}>{rec.note || '（記録未入力）'}</Text>
+                </View>
+              ))}
             </View>
           )}
         </View>
@@ -1364,6 +1557,30 @@ const esVS = StyleSheet.create({
   qaQuestion: { fontSize: 14, color: C.text, marginBottom: 4, lineHeight: 20 },
   qaCharInfo: { fontSize: 12, color: C.light },
   qaCharInfoOver: { color: C.danger, fontWeight: 'bold' },
+});
+
+const ivVS = StyleSheet.create({
+  row: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+  },
+  rowHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  stageBadge: {
+    backgroundColor: C.primary,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  stageBadgeText: { color: '#FFF', fontSize: 12, fontWeight: 'bold' },
+  date: { fontSize: 12, color: C.light },
+  note: { fontSize: 14, color: C.text, lineHeight: 21 },
 });
 
 // ─── CompanyListScreen ────────────────────────────────────────────────────────
@@ -1705,6 +1922,21 @@ function CompanyDetailScreen({ company, isNew, globalFields, onUpdateGlobalField
   const deleteTask = (id: string) =>
     set('tasks', form.tasks.filter(x => x.id !== id));
 
+  const interviews = form.interviews ?? [];
+
+  const addInterview = () =>
+    set('interviews', [...interviews, makeEmptyInterview()]);
+
+  const updateInterview = (id: string, rec: InterviewRecord) =>
+    set('interviews', interviews.map(x => x.id === id ? rec : x));
+
+  const deleteInterview = (id: string) => {
+    Alert.alert('面接記録を削除', 'この面接の記録を削除しますか？', [
+      { text: 'キャンセル', style: 'cancel' },
+      { text: '削除', style: 'destructive', onPress: () => set('interviews', interviews.filter(x => x.id !== id)) },
+    ]);
+  };
+
   return (
     <View style={dS.root}>
       {/* Nav header */}
@@ -1802,6 +2034,27 @@ function CompanyDetailScreen({ company, isNew, globalFields, onUpdateGlobalField
             </View>
           </>
         )}
+
+        {/* ── 面接記録 ── */}
+        <Text style={dS.sectionTitle}>面接記録</Text>
+        <View style={dS.section}>
+          {interviews.length === 0 && (
+            <Text style={dS.emptySectionText}>
+              一次面接・二次面接など、面接ごとに聞かれた質問や回答を記録できます
+            </Text>
+          )}
+          {interviews.map(rec => (
+            <InterviewItem
+              key={rec.id}
+              interview={rec}
+              onUpdate={updated => updateInterview(rec.id, updated)}
+              onDelete={() => deleteInterview(rec.id)}
+            />
+          ))}
+          <TouchableOpacity style={dS.addBtn} onPress={addInterview}>
+            <Text style={dS.addBtnText}>＋ 面接記録を追加</Text>
+          </TouchableOpacity>
+        </View>
 
         {/* ── タスク管理 ── */}
         <Text style={dS.sectionTitle}>タスク管理</Text>
@@ -2496,10 +2749,10 @@ function JobManagementScreen() {
             selectionStatus: data.selectionStatus ?? '',
             desireLevel: data.desireLevel ?? '',
             tasks: Array.isArray(data.tasks) ? data.tasks : [],
+            interviews: Array.isArray(data.interviews) ? data.interviews.map(normalizeInterview) : [],
             globalFieldValues: isPlainObject(data.globalFieldValues) ? toStringRecord(data.globalFieldValues) : {},
             memo: data.memo ?? '',
             entrySheet,
-            progressXp: typeof data.progressXp === 'number' ? data.progressXp : undefined,
           } as Company;
         });
         setCompanies(loaded);
@@ -2512,23 +2765,18 @@ function JobManagementScreen() {
 
   // 企業を保存（追加・更新）
   const saveCompany = useCallback((company: Company) => {
-    const existingCompany = companies.find(c => c.id === company.id);
-    const nextCompany = withUpdatedCompanyProgress({
-      ...company,
-      progressXp: Math.max(company.progressXp ?? 0, existingCompany?.progressXp ?? 0),
-    });
     setCompanies(prev => {
-      const next = prev.find(c => c.id === nextCompany.id)
-        ? prev.map(c => c.id === nextCompany.id ? nextCompany : c)
-        : [...prev, nextCompany];
+      const next = prev.find(c => c.id === company.id)
+        ? prev.map(c => c.id === company.id ? company : c)
+        : [...prev, company];
       if (isDemo) AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => {});
       return next;
     });
     if (!isDemo && uid) {
-      setDoc(doc(db, 'users', uid, 'job_companies', nextCompany.id), nextCompany).catch(() => {});
+      setDoc(doc(db, 'users', uid, 'job_companies', company.id), company).catch(() => {});
     }
-    syncNotifications(nextCompany);
-  }, [uid, isDemo, companies, syncNotifications]);
+    syncNotifications(company);
+  }, [uid, isDemo, syncNotifications]);
 
   // 企業を削除
   const removeCompany = useCallback((companyId: string, tasks: Task[]) => {

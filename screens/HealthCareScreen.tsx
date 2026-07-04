@@ -255,22 +255,29 @@ export default function HealthCareScreen() {
       setActiveCalories(null);
       setDailyAnswer(null);
       try {
-        // HealthKit target date:
-        //   - For today's form, today isn't finished yet, so we use yesterday.
-        //   - For retroactive forms, the target day is already complete, so
-        //     we use the selected day itself.
-        const hkTargetDate =
+        // HealthKit target dates:
+        //   - Steps / calories: today isn't finished yet, so today's form uses
+        //     yesterday. Retroactive forms use the selected day itself.
+        //   - Sleep: always the night that ended on the morning of the
+        //     selected day, so the selected day itself is the target.
+        const statsTargetDate =
           selectedDate === today ? dateStringFromOffset(1) : selectedDate;
         if (hkAvailable) {
-          const hk = await fetchHealthKitDataForDate(hkTargetDate);
+          const [hkStats, hkSleep] = await Promise.all([
+            fetchHealthKitDataForDate(statsTargetDate),
+            statsTargetDate === selectedDate
+              ? null
+              : fetchHealthKitDataForDate(selectedDate),
+          ]);
+          const sleep = hkSleep ?? hkStats;
           if (!cancelled) {
-            if (hk.sleepStart && hk.sleepEnd) {
-              setBedTime(hk.sleepStart);
-              setWakeTime(hk.sleepEnd);
+            if (sleep.sleepStart && sleep.sleepEnd) {
+              setBedTime(sleep.sleepStart);
+              setWakeTime(sleep.sleepEnd);
               setSleepSource('healthkit');
             }
-            setSteps(hk.steps);
-            setActiveCalories(hk.activeCalories);
+            setSteps(hkStats.steps);
+            setActiveCalories(hkStats.activeCalories);
           }
         }
         if (uid) {

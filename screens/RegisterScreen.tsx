@@ -14,6 +14,22 @@ type Props = {
   onNavigateToLogin: () => void;
 };
 
+function validatePassword(password: string): string | null {
+  if (password.length < 6) {
+    return 'パスワードは6文字以上で入力してください。';
+  }
+  if (!/[A-Z]/.test(password)) {
+    return 'パスワードには大文字のアルファベットを含めてください。';
+  }
+  if (!/[a-z]/.test(password)) {
+    return 'パスワードには小文字のアルファベットを含めてください。';
+  }
+  if (!/\d/.test(password)) {
+    return 'パスワードには数字を含めてください。';
+  }
+  return null;
+}
+
 function RegisterScreen({ onNavigateToLogin }: Props) {
   const { register } = useAuth();
   const [email, setEmail] = useState('');
@@ -23,6 +39,11 @@ function RegisterScreen({ onNavigateToLogin }: Props) {
   async function handleRegister() {
     if (!email || !password) {
       Alert.alert('エラー', 'メールアドレスとパスワードを入力してください。');
+      return;
+    }
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      Alert.alert('パスワードが条件を満たしていません', passwordError);
       return;
     }
     setSubmitting(true);
@@ -58,6 +79,10 @@ function RegisterScreen({ onNavigateToLogin }: Props) {
         secureTextEntry
         editable={!submitting}
       />
+
+      <Text style={styles.passwordHint}>
+        6文字以上で、大文字・小文字・数字をそれぞれ1文字以上含めてください。
+      </Text>
 
       <TouchableOpacity
         style={[styles.button, submitting && styles.buttonDisabled]}
@@ -101,6 +126,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     fontSize: 16,
     marginBottom: 16,
+  },
+  passwordHint: {
+    width: '100%',
+    fontSize: 12,
+    color: '#555555',
+    marginTop: -8,
+    marginBottom: 8,
   },
   button: {
     width: '100%',
