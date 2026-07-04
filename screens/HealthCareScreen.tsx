@@ -115,7 +115,17 @@ function dateStringFromOffset(daysAgo: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-// Retroactive entry window — user can fill up to 3 previous days.
+function dateToDateString(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function dateStringToDate(s: string): Date {
+  const [y, m, d] = s.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  return isNaN(date.getTime()) ? new Date() : date;
+}
+
+// Quick-access pills. Any earlier date can be picked from the calendar pill.
 const DATE_PILLS: { offset: number; label: string }[] = [
   { offset: 0, label: '今日' },
   { offset: 1, label: '昨日' },
@@ -197,6 +207,8 @@ export default function HealthCareScreen() {
   const [activeCalories, setActiveCalories] = useState<number | null>(null);
   const [showTimePicker, setShowTimePicker] = useState<'bed' | 'wake' | null>(null);
   const [tempPickerTime, setTempPickerTime] = useState<Date | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [tempPickerDate, setTempPickerDate] = useState<Date | null>(null);
   const [dailyAnswer, setDailyAnswer] = useState<DailyAnswer | null>(null);
   const [showAnswerPicker, setShowAnswerPicker] = useState(false);
 
@@ -428,7 +440,7 @@ export default function HealthCareScreen() {
         )}
       </View>
 
-      {/* Date pills — up to 3 retroactive days */}
+      {/* Date pills — quick access + calendar for any past date */}
       <View style={s.datePillRow}>
         {DATE_PILLS.map(p => {
           const pillDate = dateStringFromOffset(p.offset);
@@ -447,17 +459,30 @@ export default function HealthCareScreen() {
             </TouchableOpacity>
           );
         })}
+        {(() => {
+          // 4つのピル以外の日付が選択中ならカレンダーピルに表示する
+          const isCustomDate = !DATE_PILLS.some(p => dateStringFromOffset(p.offset) === selectedDate);
+          const [, m, d] = selectedDate.split('-').map(Number);
+          return (
+            <TouchableOpacity
+              style={[s.datePill, s.datePillCalendar, isCustomDate && s.datePillSelected]}
+              onPress={() => setShowDatePicker(true)}
+              accessibilityRole="button"
+              accessibilityLabel="日付を選択"
+              accessibilityState={{ selected: isCustomDate }}
+            >
+              <MaterialIcons
+                name="calendar-today"
+                size={14}
+                color={isCustomDate ? '#FFFFFF' : C.sub}
+              />
+              {isCustomDate && (
+                <Text style={[s.datePillText, s.datePillTextSelected]}>{`${m}/${d}`}</Text>
+              )}
+            </TouchableOpacity>
+          );
+        })()}
       </View>
-
-      {isRetroactive && (
-        <View style={s.retroBanner}>
-          <Text style={s.retroBannerText}>
-            {alreadySaved && !existingIsRetroactive
-              ? '過去の記録を更新中です。連続記録は維持されます。'
-              : '遡って記録中です。連続記録には加算されません。'}
-          </Text>
-        </View>
-      )}
 
       {/* Mood — left=悪い, right=良い */}
       <Text style={s.sectionTitle}>今日の調子</Text>
@@ -742,6 +767,59 @@ export default function HealthCareScreen() {
         />
       )}
 
+      {/* Record-date picker — any past date */}
+      {Platform.OS === 'ios' && showDatePicker && (
+        <Modal
+          visible
+          transparent
+          animationType="slide"
+          onRequestClose={() => { setTempPickerDate(null); setShowDatePicker(false); }}
+        >
+          <View style={s.overlay}>
+            <View style={s.pickerCard}>
+              <View style={s.pickerHeader}>
+                <TouchableOpacity onPress={() => { setTempPickerDate(null); setShowDatePicker(false); }}>
+                  <Text style={s.pickerCancelText}>キャンセル</Text>
+                </TouchableOpacity>
+                <Text style={s.pickerTitle}>記録する日付</Text>
+                <TouchableOpacity onPress={() => {
+                  if (tempPickerDate !== null) {
+                    setSelectedDate(dateToDateString(tempPickerDate));
+                  }
+                  setTempPickerDate(null);
+                  setShowDatePicker(false);
+                }}>
+                  <Text style={s.pickerDoneText}>完了</Text>
+                </TouchableOpacity>
+              </View>
+              <DateTimePicker
+                value={tempPickerDate ?? dateStringToDate(selectedDate)}
+                mode="date"
+                display="spinner"
+                locale="ja"
+                maximumDate={new Date()}
+                textColor="#000000"
+                onChange={(_, date) => {
+                  if (date) { setTempPickerDate(date); }
+                }}
+              />
+            </View>
+          </View>
+        </Modal>
+      )}
+      {Platform.OS === 'android' && showDatePicker && (
+        <DateTimePicker
+          value={dateStringToDate(selectedDate)}
+          mode="date"
+          display="default"
+          maximumDate={new Date()}
+          onChange={(_, date) => {
+            setShowDatePicker(false);
+            if (date) { setSelectedDate(dateToDateString(date)); }
+          }}
+        />
+      )}
+
       {/* Answer pulldown — simple bottom sheet with the 4 choices */}
       {showAnswerPicker && (
         <Modal
@@ -867,19 +945,10 @@ const s = StyleSheet.create({
   },
   datePillText: { fontSize: 12, color: C.sub },
   datePillTextSelected: { color: '#FFF', fontWeight: 'bold' },
-
-  retroBanner: {
-    backgroundColor: '#FFF6EC',
-    borderColor: '#E8C9A0',
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    marginBottom: 8,
-  },
-  retroBannerText: {
-    fontSize: 11,
-    color: '#8A5A1E',
+  datePillCalendar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
 
   sectionTitle: {
