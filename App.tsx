@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import AppLockGate from './components/AppLockGate';
 import { ChatIcon, HomeIcon, SettingsIcon, WorkIcon } from './components/NavIcons';
 import SplashScreen from './components/SplashScreen';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -18,8 +19,14 @@ import JobSupportScreen from './screens/JobSupportScreen';
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
 import SettingsScreen from './screens/SettingsScreen';
+import TermsScreen from './screens/TermsScreen';
 import { requestHealthKitPermissions } from './services/healthService';
 import { requestNotificationPermission } from './services/notifications';
+import {
+  TERMS_VERSION,
+  getAcceptedTermsVersion,
+  saveAcceptedTermsVersion,
+} from './services/terms';
 
 type TabName = 'health_care' | 'job_management' | 'job_support' | 'settings';
 type AuthScreen = 'login' | 'register' | 'forgot_password';
@@ -150,20 +157,45 @@ function AppContent() {
 
 function App() {
   const [splashDone, setSplashDone] = useState(false);
+  // null = 確認中（利用規約に同意済みかどうか）
+  const [termsAccepted, setTermsAccepted] = useState<boolean | null>(null);
 
   useEffect(() => {
+    getAcceptedTermsVersion()
+      .then(version => setTermsAccepted(version >= TERMS_VERSION))
+      .catch(() => setTermsAccepted(false));
+  }, []);
+
+  useEffect(() => {
+    if (termsAccepted !== true) return;
     // Request permissions sequentially so dialogs don't stack
     (async () => {
       await requestNotificationPermission().catch(() => {});
       await requestHealthKitPermissions().catch(() => {});
     })();
-  }, []);
+  }, [termsAccepted]);
+
+  const handleAcceptTerms = () => {
+    saveAcceptedTermsVersion().catch(() => {});
+    setTermsAccepted(true);
+  };
 
   return (
     <SafeAreaProvider>
-      <AuthProvider>
-        <AppContent />
-      </AuthProvider>
+      {termsAccepted === false ? (
+        <SafeAreaView style={styles.container}>
+          <StatusBar barStyle="dark-content" />
+          <TermsScreen mode="accept" onAccept={handleAcceptTerms} />
+        </SafeAreaView>
+      ) : termsAccepted === true ? (
+        <AppLockGate>
+          <AuthProvider>
+            <AppContent />
+          </AuthProvider>
+        </AppLockGate>
+      ) : (
+        <View style={styles.container} />
+      )}
       {!splashDone && <SplashScreen onDone={() => setSplashDone(true)} />}
     </SafeAreaProvider>
   );

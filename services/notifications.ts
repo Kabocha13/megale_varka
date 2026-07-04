@@ -202,6 +202,65 @@ export async function cancelInterviewEveNotification(companyId: string): Promise
   await notifee.cancelTriggerNotification(`interview_eve_${companyId}`).catch(() => {});
 }
 
+// ─── インターン前夜リマインダー ───────────────────────────────────────────────
+
+const INTERN_EVE_CHANNEL_ID = 'intern_eve';
+const INTERN_EVE_HOUR = 21;
+
+async function ensureInternEveChannel(): Promise<string> {
+  await notifee.createChannel({
+    id: INTERN_EVE_CHANNEL_ID,
+    name: 'インターン前夜リマインダー',
+    importance: AndroidImportance.HIGH,
+  });
+  return INTERN_EVE_CHANNEL_ID;
+}
+
+/**
+ * インターン前日の21:00にリマインダー通知をスケジュールする。
+ * 前日21:00がすでに過ぎている場合は何もしない。
+ */
+export async function scheduleInternEveNotification(
+  internId: string,
+  companyName: string,
+  internDate: string, // YYYY-MM-DD
+  internTime: string, // HH:mm（不明な場合は ''）
+): Promise<void> {
+  await cancelInternEveNotification(internId);
+
+  const parts = internDate.split('-').map(Number);
+  if (parts.length !== 3 || parts.some(isNaN)) return;
+  const [year, month, day] = parts;
+
+  const eve = new Date(year, month - 1, day - 1, INTERN_EVE_HOUR, 0, 0);
+  if (eve.getTime() <= Date.now()) return;
+
+  const channelId = await ensureInternEveChannel();
+  const timeLabel = /^([01]?\d|2[0-3]):[0-5]\d$/.test(internTime)
+    ? `${internTime}から`
+    : '';
+
+  const trigger: TimestampTrigger = {
+    type: TriggerType.TIMESTAMP,
+    timestamp: eve.getTime(),
+  };
+
+  await notifee.createTriggerNotification(
+    {
+      id: `intern_eve_${internId}`,
+      title: `明日は${companyName || '企業'}のインターンです`,
+      body: `明日${timeLabel}インターンがあります。持ち物や集合場所を確認して、今夜は早めに休みましょう。`,
+      android: { channelId, importance: AndroidImportance.HIGH },
+      ios: { sound: 'default' },
+    },
+    trigger,
+  );
+}
+
+export async function cancelInternEveNotification(internId: string): Promise<void> {
+  await notifee.cancelTriggerNotification(`intern_eve_${internId}`).catch(() => {});
+}
+
 // ─── 毎日ヘルス記録リマインダー ───────────────────────────────────────────────
 
 export async function getDailyReminderConfig(): Promise<DailyReminderConfig> {

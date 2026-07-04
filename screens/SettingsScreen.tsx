@@ -2,6 +2,7 @@ import notifee, { AuthorizationStatus } from '@notifee/react-native';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   AppState,
   AppStateStatus,
@@ -12,13 +13,38 @@ import {
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
+import TermsScreen from './TermsScreen';
+import {
+  Announcement,
+  countUnread,
+  fetchAnnouncements,
+  formatAnnouncementDate,
+  getLastReadMillis,
+  saveLastReadMillis,
+} from '../services/announcements';
+import {
+  authenticateWithBiometrics,
+  biometryLabel,
+  disableAppLock,
+  enableAppLock,
+  getBiometryType,
+  isAppLockEnabled,
+} from '../services/appLock';
 import { hasRequestedHealthKit, isHealthKitAvailable } from '../services/healthService';
+import {
+  INQUIRY_CATEGORIES,
+  SUPPORT_EMAIL,
+  buildInquiryMailUrl,
+  submitInquiry,
+} from '../services/inquiry';
 import { getGraduationYear, graduationYearOptions, saveGraduationYear } from '../services/profile';
 import { gradYearShortLabel } from '../services/jobSupport';
+import { DEVELOPER_NAME } from '../services/terms';
 import {
   DEFAULT_DAILY_REMINDER,
   DEFAULT_REMINDER_DAYS,
@@ -74,8 +100,17 @@ function daysLabel(selected: number[]): string {
     .join('・');
 }
 
+const DEMO_ANNOUNCEMENTS: Announcement[] = [
+  {
+    id: 'demo-1',
+    title: 'デモモードのお知らせ',
+    body: 'これはデモ表示です。実際のお知らせは運営がFirebaseに登録したものが表示されます。',
+    createdAtMillis: Date.now(),
+  },
+];
+
 export default function SettingsScreen() {
-  const { email, logout } = useAuth();
+  const { uid, email, isDemo, logout } = useAuth();
   const [reminderDays, setReminderDays] = useState<number[]>(DEFAULT_REMINDER_DAYS);
   const [showPicker, setShowPicker] = useState(false);
   const [draft, setDraft] = useState<number[]>(DEFAULT_REMINDER_DAYS);
@@ -90,6 +125,25 @@ export default function SettingsScreen() {
     return d;
   });
   const appState = useRef(AppState.currentState);
+
+  // 生体認証ロック
+  const [biometryName, setBiometryName] = useState<string>('生体認証');
+  const [biometryAvailable, setBiometryAvailable] = useState(false);
+  const [appLockEnabled, setAppLockEnabled] = useState(false);
+
+  // 運営からのお知らせ
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [lastReadMillis, setLastReadMillis] = useState(0);
+  const [showAnnouncements, setShowAnnouncements] = useState(false);
+
+  // お問い合わせフォーム
+  const [showInquiry, setShowInquiry] = useState(false);
+  const [inquiryCategory, setInquiryCategory] = useState<string>(INQUIRY_CATEGORIES[0]);
+  const [inquiryMessage, setInquiryMessage] = useState('');
+  const [inquirySending, setInquirySending] = useState(false);
+
+  // 利用規約
+  const [showTerms, setShowTerms] = useState(false);
 
   const refreshPerms = useCallback(() => {
     fetchPermStatuses().then(setPerms).catch(() => {});
@@ -110,6 +164,19 @@ export default function SettingsScreen() {
 
     getGraduationYear().then(setGraduationYear).catch(() => {});
 
+    getBiometryType().then(type => {
+      setBiometryAvailable(type !== null);
+      setBiometryName(biometryLabel(type));
+    }).catch(() => {});
+    isAppLockEnabled().then(setAppLockEnabled).catch(() => {});
+
+    getLastReadMillis().then(setLastReadMillis).catch(() => {});
+    if (isDemo) {
+      setAnnouncements(DEMO_ANNOUNCEMENTS);
+    } else {
+      fetchAnnouncements().then(setAnnouncements).catch(() => {});
+    }
+
     refreshPerms();
 
     const sub = AppState.addEventListener('change', (next: AppStateStatus) => {
@@ -119,7 +186,77 @@ export default function SettingsScreen() {
       appState.current = next;
     });
     return () => sub.remove();
-  }, [refreshPerms]);
+  }, [refreshPerms, isDemo]);
+
+  const unreadCount = countUnread(announcements, lastReadMillis);
+
+  const handleOpenAnnouncements = () => {
+    setShowAnnouncements(true);
+    // 開いた時点で既読にする
+    const newest = announcements.reduce((max, a) => Math.max(max, a.createdAtMillis), 0);
+    if (newest > lastReadMillis) {
+      saveLastReadMillis(newest).catch(() => {});
+    }
+  };
+
+  const handleCloseAnnouncements = () => {
+    setShowAnnouncements(false);
+    const newest = announcements.reduce((max, a) => Math.max(max, a.createdAtMillis), 0);
+    if (newest > lastReadMillis) setLastReadMillis(newest);
+  };
+
+  const handleToggleAppLock = async (enabled: boolean) => {
+    if (enabled) {
+      setAppLockEnabled(true);
+      try {
+        await enableAppLock();
+        const verified = await authenticateWithBiometrics();
+        if (!verified) {
+          throw new Error('verification failed');
+        }
+      } catch {
+        await disableAppLock().catch(() => {});
+        setAppLockEnabled(false);
+        Alert.alert(
+          'ロックを設定できませんでした',
+          `${biometryName}を確認できませんでした。端末に生体認証（またはパスコード）が設定されているか確認してください。`,
+        );
+      }
+    } else {
+      setAppLockEnabled(false);
+      await disableAppLock().catch(() => {});
+    }
+  };
+
+  const handleSubmitInquiry = async () => {
+    const message = inquiryMessage.trim();
+    if (!message) {
+      Alert.alert('エラー', 'お問い合わせ内容を入力してください。');
+      return;
+    }
+    setInquirySending(true);
+    try {
+      if (!isDemo) {
+        await submitInquiry({ uid, email, category: inquiryCategory, message });
+      }
+      setInquirySending(false);
+      setShowInquiry(false);
+      setInquiryMessage('');
+      Alert.alert('送信しました', 'お問い合わせありがとうございます。内容を確認のうえ、必要に応じてご連絡します。');
+    } catch {
+      setInquirySending(false);
+      Alert.alert(
+        '送信できませんでした',
+        '通信状態を確認して再度お試しください。解決しない場合はメールでお問い合わせください。',
+      );
+    }
+  };
+
+  const handleOpenInquiryMail = () => {
+    Linking.openURL(buildInquiryMailUrl(inquiryCategory, email)).catch(() => {
+      Alert.alert('エラー', `メールアプリを開けませんでした。${SUPPORT_EMAIL} 宛にお問い合わせください。`);
+    });
+  };
 
   const handleOpenPicker = () => {
     setDraft(reminderDays);
@@ -208,6 +345,34 @@ export default function SettingsScreen() {
     <ScrollView style={s.container} contentContainerStyle={s.content}>
       <Text style={s.title}>設定</Text>
 
+      {/* 運営からのお知らせ */}
+      <Text style={s.sectionTitle}>運営からのお知らせ</Text>
+      <View style={[s.card, unreadCount > 0 && s.cardHighlight]}>
+        <TouchableOpacity
+          style={s.row}
+          onPress={handleOpenAnnouncements}
+          accessibilityRole="button"
+          accessibilityLabel={`お知らせを開く${unreadCount > 0 ? `（新着${unreadCount}件）` : ''}`}
+        >
+          <View style={s.rowLeft}>
+            <View style={s.announceLabelRow}>
+              <Text style={s.rowLabel}>お知らせ</Text>
+              {unreadCount > 0 && (
+                <View style={s.newBadge}>
+                  <Text style={s.newBadgeText}>NEW {unreadCount}</Text>
+                </View>
+              )}
+            </View>
+            <Text style={s.rowSub} numberOfLines={1}>
+              {announcements.length > 0
+                ? announcements[0].title
+                : '現在お知らせはありません'}
+            </Text>
+          </View>
+          <Text style={s.chevron}>›</Text>
+        </TouchableOpacity>
+      </View>
+
       {/* アクセス許可 */}
       <Text style={s.sectionTitle}>アクセス許可</Text>
       <View style={s.card}>
@@ -227,6 +392,28 @@ export default function SettingsScreen() {
             <Text style={s.openSettingsBtnText}>設定を開く</Text>
           </TouchableOpacity>
         )}
+      </View>
+
+      {/* セキュリティ */}
+      <Text style={s.sectionTitle}>セキュリティ</Text>
+      <View style={s.card}>
+        <View style={s.row}>
+          <View style={s.rowLeft}>
+            <Text style={s.rowLabel}>生体認証ロック</Text>
+            <Text style={s.rowSub}>
+              {biometryAvailable
+                ? `起動時に${biometryName}でロックを解除します`
+                : 'この端末では生体認証を利用できません'}
+            </Text>
+          </View>
+          <Switch
+            value={appLockEnabled}
+            onValueChange={handleToggleAppLock}
+            disabled={!biometryAvailable && !appLockEnabled}
+            trackColor={{ false: C.border, true: C.primary }}
+            thumbColor="#fff"
+          />
+        </View>
       </View>
 
       {/* リマインド設定 */}
@@ -314,6 +501,59 @@ export default function SettingsScreen() {
         </View>
       </View>
 
+      {/* お問い合わせ */}
+      <Text style={s.sectionTitle}>お問い合わせ</Text>
+      <View style={s.card}>
+        <TouchableOpacity
+          style={s.row}
+          onPress={() => setShowInquiry(true)}
+          accessibilityRole="button"
+          accessibilityLabel="お問い合わせフォームを開く"
+        >
+          <View style={s.rowLeft}>
+            <Text style={s.rowLabel}>お問い合わせフォーム</Text>
+            <Text style={s.rowSub}>不具合の報告・機能の要望などはこちら</Text>
+          </View>
+          <Text style={s.chevron}>›</Text>
+        </TouchableOpacity>
+        <View style={s.divider} />
+        <TouchableOpacity
+          style={s.row}
+          onPress={handleOpenInquiryMail}
+          accessibilityRole="button"
+          accessibilityLabel="メールで問い合わせる"
+        >
+          <View style={s.rowLeft}>
+            <Text style={s.rowLabel}>メールで問い合わせる</Text>
+            <Text style={s.rowSub}>{SUPPORT_EMAIL}</Text>
+          </View>
+          <Text style={s.chevron}>›</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* アプリ情報 */}
+      <Text style={s.sectionTitle}>アプリ情報</Text>
+      <View style={s.card}>
+        <TouchableOpacity
+          style={s.row}
+          onPress={() => setShowTerms(true)}
+          accessibilityRole="button"
+          accessibilityLabel="利用規約を表示"
+        >
+          <View style={s.rowLeft}>
+            <Text style={s.rowLabel}>利用規約</Text>
+          </View>
+          <Text style={s.chevron}>›</Text>
+        </TouchableOpacity>
+        <View style={s.divider} />
+        <View style={s.row}>
+          <View style={s.rowLeft}>
+            <Text style={s.rowLabel}>開発者</Text>
+          </View>
+          <Text style={s.rowValueText}>{DEVELOPER_NAME}</Text>
+        </View>
+      </View>
+
       {/* ログアウト */}
       <Text style={s.sectionTitle}>アカウント</Text>
       <View style={s.card}>
@@ -392,6 +632,119 @@ export default function SettingsScreen() {
             </View>
           </View>
         </View>
+      </Modal>
+
+      {/* 運営からのお知らせ */}
+      <Modal visible={showAnnouncements} animationType="slide" onRequestClose={handleCloseAnnouncements}>
+        <View style={s.fullModalRoot}>
+          <View style={s.fullModalHeader}>
+            <Text style={s.fullModalTitle}>運営からのお知らせ</Text>
+            <TouchableOpacity
+              onPress={handleCloseAnnouncements}
+              accessibilityRole="button"
+              accessibilityLabel="お知らせを閉じる"
+            >
+              <Text style={s.fullModalClose}>閉じる</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={s.fullModalScroll} contentContainerStyle={s.fullModalContent}>
+            {announcements.length === 0 ? (
+              <Text style={s.announceEmpty}>現在お知らせはありません</Text>
+            ) : (
+              announcements.map(a => {
+                const isNew = a.createdAtMillis > lastReadMillis;
+                return (
+                  <View key={a.id} style={[s.announceCard, isNew && s.announceCardNew]}>
+                    <View style={s.announceHeader}>
+                      {isNew && (
+                        <View style={s.newBadge}>
+                          <Text style={s.newBadgeText}>NEW</Text>
+                        </View>
+                      )}
+                      <Text style={s.announceDate}>{formatAnnouncementDate(a.createdAtMillis)}</Text>
+                    </View>
+                    <Text style={s.announceTitle}>{a.title}</Text>
+                    <Text style={s.announceBody}>{a.body}</Text>
+                  </View>
+                );
+              })
+            )}
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* お問い合わせフォーム */}
+      <Modal visible={showInquiry} animationType="slide" onRequestClose={() => setShowInquiry(false)}>
+        <View style={s.fullModalRoot}>
+          <View style={s.fullModalHeader}>
+            <Text style={s.fullModalTitle}>お問い合わせ</Text>
+            <TouchableOpacity
+              onPress={() => setShowInquiry(false)}
+              accessibilityRole="button"
+              accessibilityLabel="お問い合わせフォームを閉じる"
+            >
+              <Text style={s.fullModalClose}>閉じる</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView
+            style={s.fullModalScroll}
+            contentContainerStyle={s.fullModalContent}
+            keyboardShouldPersistTaps="handled"
+          >
+            <Text style={s.inquiryLabel}>お問い合わせの種類</Text>
+            <View style={s.inquiryChipRow}>
+              {INQUIRY_CATEGORIES.map(cat => (
+                <TouchableOpacity
+                  key={cat}
+                  style={[s.inquiryChip, inquiryCategory === cat && s.inquiryChipActive]}
+                  onPress={() => setInquiryCategory(cat)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: inquiryCategory === cat }}
+                >
+                  <Text style={[s.inquiryChipText, inquiryCategory === cat && s.inquiryChipTextActive]}>
+                    {cat}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={s.inquiryLabel}>内容</Text>
+            <TextInput
+              style={s.inquiryInput}
+              value={inquiryMessage}
+              onChangeText={setInquiryMessage}
+              placeholder={'できるだけ詳しくご記入ください。\n不具合の場合は、操作手順や表示されたエラーも書いていただけると助かります。'}
+              placeholderTextColor={C.muted}
+              multiline
+              textAlignVertical="top"
+            />
+            <Text style={s.inquiryNote}>
+              ログイン中のメールアドレス（{email ?? '未ログイン'}）が問い合わせに添付されます。
+            </Text>
+
+            <TouchableOpacity
+              style={[s.inquirySubmitBtn, inquirySending && s.inquirySubmitBtnDisabled]}
+              onPress={handleSubmitInquiry}
+              disabled={inquirySending}
+              accessibilityRole="button"
+            >
+              {inquirySending ? (
+                <ActivityIndicator color="#FFF" />
+              ) : (
+                <Text style={s.inquirySubmitBtnText}>送信する</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity style={s.inquiryMailLink} onPress={handleOpenInquiryMail}>
+              <Text style={s.inquiryMailLinkText}>メールアプリで問い合わせる（{SUPPORT_EMAIL}）</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* 利用規約 */}
+      <Modal visible={showTerms} animationType="slide" onRequestClose={() => setShowTerms(false)}>
+        <TermsScreen mode="view" onClose={() => setShowTerms(false)} />
       </Modal>
 
       {/* リマインド日数ピッカー（複数選択） */}
@@ -480,6 +833,7 @@ const C = {
   sub: '#555555',
   muted: '#A8BDD4',
   danger: '#E53935',
+  warning: '#F59E0B',
 };
 
 const s = StyleSheet.create({
@@ -632,4 +986,81 @@ const s = StyleSheet.create({
   },
   pickerConfirmText: { color: '#FFF', fontSize: 15, fontWeight: 'bold' },
   iosTimePicker: { width: '100%', height: 180 },
+  cardHighlight: { borderColor: C.warning, borderWidth: 2 },
+  chevron: { fontSize: 22, color: C.muted, marginLeft: 8 },
+  rowValueText: { fontSize: 14, color: C.text },
+  announceLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  newBadge: {
+    backgroundColor: C.warning,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  newBadgeText: { color: '#FFF', fontSize: 11, fontWeight: 'bold' },
+  fullModalRoot: { flex: 1, backgroundColor: C.bg },
+  fullModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    backgroundColor: C.card,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+  },
+  fullModalTitle: { fontSize: 17, fontWeight: 'bold', color: C.primary },
+  fullModalClose: { fontSize: 15, color: C.primary },
+  fullModalScroll: { flex: 1 },
+  fullModalContent: { padding: 16, paddingBottom: 40 },
+  announceEmpty: { fontSize: 14, color: C.muted, textAlign: 'center', paddingTop: 48 },
+  announceCard: {
+    backgroundColor: C.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: C.border,
+    padding: 14,
+    marginBottom: 10,
+  },
+  announceCardNew: { borderColor: C.warning, borderWidth: 2 },
+  announceHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  announceDate: { fontSize: 12, color: C.muted },
+  announceTitle: { fontSize: 15, fontWeight: 'bold', color: C.text, marginBottom: 6 },
+  announceBody: { fontSize: 13, color: C.sub, lineHeight: 21 },
+  inquiryLabel: { fontSize: 13, fontWeight: 'bold', color: C.sub, marginBottom: 8, marginTop: 12 },
+  inquiryChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  inquiryChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 16,
+    backgroundColor: C.card,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  inquiryChipActive: { backgroundColor: C.primary, borderColor: C.primary },
+  inquiryChipText: { fontSize: 13, color: C.sub },
+  inquiryChipTextActive: { color: '#FFF', fontWeight: 'bold' },
+  inquiryInput: {
+    backgroundColor: C.card,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: C.text,
+    minHeight: 160,
+    lineHeight: 21,
+  },
+  inquiryNote: { fontSize: 11, color: C.muted, marginTop: 8 },
+  inquirySubmitBtn: {
+    marginTop: 16,
+    backgroundColor: C.primary,
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  inquirySubmitBtnDisabled: { opacity: 0.6 },
+  inquirySubmitBtnText: { color: '#FFF', fontSize: 15, fontWeight: 'bold' },
+  inquiryMailLink: { marginTop: 16, alignItems: 'center', paddingVertical: 8 },
+  inquiryMailLinkText: { fontSize: 13, color: C.primary, textDecorationLine: 'underline' },
 });
