@@ -83,19 +83,6 @@ interface ESItem {
   qaItems: ESQAItem[];
 }
 
-// 面接ノート: 逆質問の準備と、実際に聞かれた質問の記録
-interface InterviewQA {
-  id: string;
-  question: string;
-  memo: string;
-}
-
-interface InterviewSheet {
-  reverseQuestions: InterviewQA[]; // 事前に準備する逆質問
-  askedQuestions: InterviewQA[];   // 面接で聞かれた質問の記録
-  updatedAt: string;
-}
-
 interface Company {
   id: string;
   name: string;
@@ -109,7 +96,6 @@ interface Company {
   globalFieldValues: Record<string, string>;
   memo: string;
   entrySheet: ESItem | null;
-  interviewSheet: InterviewSheet | null;
   progressXp?: number;
   nextInterviewDate: string; // YYYY-MM-DD（未設定は ''）
   nextInterviewTime: string; // HH:mm（未設定は ''）
@@ -242,36 +228,27 @@ function makeEmptyCompany(): Company {
     globalFieldValues: {},
     memo: '',
     entrySheet: null,
-    interviewSheet: null,
     nextInterviewDate: '',
     nextInterviewTime: '',
   };
 }
 
-function makeEmptyInterviewQA(): InterviewQA {
-  return { id: makeUid(), question: '', memo: '' };
-}
-
-function makeEmptyInterviewSheet(): InterviewSheet {
-  return { reverseQuestions: [makeEmptyInterviewQA()], askedQuestions: [], updatedAt: nowISO() };
-}
-
-function normalizeInterviewQA(data: unknown): InterviewQA {
-  const d = isPlainObject(data) ? data : {};
-  return {
-    id: typeof d.id === 'string' && d.id ? d.id : makeUid(),
-    question: typeof d.question === 'string' ? d.question : '',
-    memo: typeof d.memo === 'string' ? d.memo : '',
+// 廃止した「面接ノート」のデータを面接記録（自由記述）1件に変換して引き継ぐ
+function migrateInterviewSheetToRecords(data: unknown): InterviewRecord[] {
+  if (!isPlainObject(data)) return [];
+  const qaText = (item: unknown): string => {
+    if (!isPlainObject(item)) return '';
+    const question = typeof item.question === 'string' ? item.question.trim() : '';
+    const memo = typeof item.memo === 'string' ? item.memo.trim() : '';
+    return question && memo ? `${question}\n${memo}` : question || memo;
   };
-}
-
-function normalizeInterviewSheet(data: unknown): InterviewSheet | null {
-  if (!isPlainObject(data)) return null;
-  return {
-    reverseQuestions: Array.isArray(data.reverseQuestions) ? data.reverseQuestions.map(normalizeInterviewQA) : [],
-    askedQuestions: Array.isArray(data.askedQuestions) ? data.askedQuestions.map(normalizeInterviewQA) : [],
-    updatedAt: typeof data.updatedAt === 'string' && data.updatedAt ? data.updatedAt : nowISO(),
-  };
+  const asked = Array.isArray(data.askedQuestions) ? data.askedQuestions.map(qaText).filter(Boolean) : [];
+  const reverse = Array.isArray(data.reverseQuestions) ? data.reverseQuestions.map(qaText).filter(Boolean) : [];
+  const parts: string[] = [];
+  if (asked.length) parts.push(`【聞かれた質問】\n${asked.join('\n\n')}`);
+  if (reverse.length) parts.push(`【逆質問の準備】\n${reverse.join('\n\n')}`);
+  if (!parts.length) return [];
+  return [{ id: makeUid(), stage: 'その他', date: '', note: parts.join('\n\n') }];
 }
 
 function makeEmptyInterview(): InterviewRecord {
@@ -1249,15 +1226,13 @@ interface CompanyViewScreenProps {
   onBack: () => void;
   onToggleTask: (taskId: string, completed: boolean) => void;
   onNavigateToES: () => void;
-  onNavigateToInterview: () => void;
 }
 
-function CompanyViewScreen({ company, globalFields, onEdit, onBack, onToggleTask, onNavigateToES, onNavigateToInterview }: CompanyViewScreenProps) {
+function CompanyViewScreen({ company, globalFields, onEdit, onBack, onToggleTask, onNavigateToES }: CompanyViewScreenProps) {
   const pendingTasks = company.tasks.filter(t => !t.completed);
   const doneTasks = company.tasks.filter(t => t.completed);
   const entrySheet = company.entrySheet ?? null;
   const interviews = company.interviews ?? [];
-  const interviewSheet = company.interviewSheet ?? null;
 
   return (
     <View style={vS.root}>
@@ -1378,28 +1353,6 @@ function CompanyViewScreen({ company, globalFields, onEdit, onBack, onToggleTask
                   );
                 })
               )}
-            </View>
-          )}
-        </View>
-
-        {/* 面接ノート */}
-        <View style={vS.section}>
-          <View style={esVS.sectionHeader}>
-            <Text style={vS.sectionTitle}>面接ノート</Text>
-            <TouchableOpacity
-              style={esVS.editEsBtn}
-              onPress={onNavigateToInterview}
-              accessibilityRole="button"
-            >
-              <Text style={esVS.editEsBtnText}>{interviewSheet ? '編集' : '作成'}</Text>
-            </TouchableOpacity>
-          </View>
-          {!interviewSheet ? (
-            <Text style={vS.emptyText}>逆質問や聞かれた質問をまだ記録していません</Text>
-          ) : (
-            <View style={vS.card}>
-              <ViewRow label="逆質問の準備" value={`${interviewSheet.reverseQuestions.length}件`} />
-              <ViewRow label="聞かれた質問の記録" value={`${interviewSheet.askedQuestions.length}件`} last />
             </View>
           )}
         </View>
@@ -1962,11 +1915,10 @@ interface CompanyDetailScreenProps {
   onSave: (c: Company) => void;
   onDelete: () => void;
   onNavigateToES?: (c: Company) => void;
-  onNavigateToInterview?: (c: Company) => void;
   onBack: () => void;
 }
 
-function CompanyDetailScreen({ company, isNew, globalFields, listResetKey = 0, onUpdateGlobalFields, onSave, onDelete, onNavigateToES, onNavigateToInterview, onBack }: CompanyDetailScreenProps) {
+function CompanyDetailScreen({ company, isNew, globalFields, listResetKey = 0, onUpdateGlobalFields, onSave, onDelete, onNavigateToES, onBack }: CompanyDetailScreenProps) {
   const [form, setForm] = useState<Company>(company);
   const [picker, setPicker] = useState<'goal' | 'desire' | 'status' | null>(null);
   const [showGlobalFieldsModal, setShowGlobalFieldsModal] = useState(false);
@@ -2013,16 +1965,6 @@ function CompanyDetailScreen({ company, isNew, globalFields, listResetKey = 0, o
     onSave(form);
     originalRef.current = JSON.stringify(form);
     onNavigateToES?.(form);
-  };
-
-  const handleNavigateToInterview = () => {
-    if (!form.name.trim()) {
-      Alert.alert('エラー', '会社名を入力してください。');
-      return;
-    }
-    onSave(form);
-    originalRef.current = JSON.stringify(form);
-    onNavigateToInterview?.(form);
   };
 
   const handleDelete = () => {
@@ -2193,25 +2135,6 @@ function CompanyDetailScreen({ company, isNew, globalFields, listResetKey = 0, o
               </View>
             </View>
 
-            <Text style={dS.sectionTitle}>面接ノート</Text>
-            <View style={dS.section}>
-              <View style={dS.esHeader}>
-                <View style={dS.esInfo}>
-                  <Text style={dS.esTitle}>
-                    {form.interviewSheet
-                      ? `逆質問 ${form.interviewSheet.reverseQuestions.length}件 / 記録 ${form.interviewSheet.askedQuestions.length}件`
-                      : 'まだ作成されていません'}
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  style={dS.esActionBtn}
-                  onPress={handleNavigateToInterview}
-                  accessibilityRole="button"
-                >
-                  <Text style={dS.esActionBtnText}>{form.interviewSheet ? '編集' : '作成'}</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
           </>
         )}
 
@@ -2862,234 +2785,6 @@ const esS = StyleSheet.create({
   bottomPad: { height: 32 },
 });
 
-// ─── InterviewSheetScreen（面接ノート） ───────────────────────────────────────
-
-interface InterviewQAItemProps {
-  item: InterviewQA;
-  index: number;
-  questionPlaceholder: string;
-  memoPlaceholder: string;
-  onUpdate: (item: InterviewQA) => void;
-  onDelete: () => void;
-}
-
-function InterviewQAItemView({ item, index, questionPlaceholder, memoPlaceholder, onUpdate, onDelete }: InterviewQAItemProps) {
-  return (
-    <View style={iqS.card}>
-      <View style={iqS.headerRow}>
-        <View style={iqS.indexBadge}>
-          <Text style={iqS.indexBadgeText}>Q{index + 1}</Text>
-        </View>
-        <TouchableOpacity onPress={onDelete} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Text style={iqS.deleteText}>削除</Text>
-        </TouchableOpacity>
-      </View>
-      <Text style={iqS.label}>質問</Text>
-      <TextInput
-        style={iqS.input}
-        value={item.question}
-        onChangeText={v => onUpdate({ ...item, question: v })}
-        placeholder={questionPlaceholder}
-        placeholderTextColor={C.muted}
-        multiline
-        textAlignVertical="top"
-      />
-      <Text style={iqS.label}>メモ</Text>
-      <TextInput
-        style={[iqS.input, iqS.inputMemo]}
-        value={item.memo}
-        onChangeText={v => onUpdate({ ...item, memo: v })}
-        placeholder={memoPlaceholder}
-        placeholderTextColor={C.muted}
-        multiline
-        textAlignVertical="top"
-      />
-    </View>
-  );
-}
-
-const iqS = StyleSheet.create({
-  card: {
-    backgroundColor: '#F8F8F8',
-    borderRadius: 10,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: C.border,
-    padding: 12,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  indexBadge: {
-    backgroundColor: C.primary,
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  indexBadgeText: { color: C.card, fontSize: 12, fontWeight: 'bold' },
-  deleteText: { color: C.danger, fontSize: 13 },
-  label: { fontSize: 12, color: C.sub, marginTop: 10, marginBottom: 4 },
-  input: {
-    borderWidth: 1,
-    borderColor: C.border,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: C.text,
-    backgroundColor: C.card,
-    minHeight: 44,
-  },
-  inputMemo: { minHeight: 72, lineHeight: 20 },
-});
-
-type InterviewSection = 'reverseQuestions' | 'askedQuestions';
-
-interface InterviewSheetScreenProps {
-  sheet: InterviewSheet;
-  isNew: boolean;
-  companyName: string;
-  listResetKey?: number;
-  onSave: (s: InterviewSheet) => void;
-  onDelete: () => void;
-  onBack: () => void;
-  onListReset?: () => void;
-}
-
-function InterviewSheetScreen({ sheet, isNew, companyName, listResetKey = 0, onSave, onDelete, onBack, onListReset }: InterviewSheetScreenProps) {
-  const [form, setForm] = useState<InterviewSheet>(sheet);
-  const originalRef = useRef(JSON.stringify(sheet));
-  const listResetKeyRef = useRef(listResetKey);
-
-  const isDirty = useCallback(() => JSON.stringify(form) !== originalRef.current, [form]);
-
-  const confirmLeave = useCallback((next: () => void) => {
-    if (isDirty()) {
-      Alert.alert('変更を破棄しますか？', '保存されていない変更は失われます。', [
-        { text: '続けて編集', style: 'cancel' },
-        { text: '破棄して戻る', style: 'destructive', onPress: next },
-      ]);
-    } else {
-      next();
-    }
-  }, [isDirty]);
-
-  const handleBack = useCallback(() => {
-    confirmLeave(onBack);
-  }, [confirmLeave, onBack]);
-
-  useEffect(() => {
-    if (listResetKeyRef.current === listResetKey) { return; }
-    listResetKeyRef.current = listResetKey;
-    confirmLeave(onListReset ?? onBack);
-  }, [listResetKey, confirmLeave, onBack, onListReset]);
-
-  const handleSave = () => {
-    const updated: InterviewSheet = { ...form, updatedAt: nowISO() };
-    onSave(updated);
-    originalRef.current = JSON.stringify(updated);
-    onBack();
-  };
-
-  const handleDelete = () => {
-    Alert.alert('面接ノートを削除', '削除すると元に戻せません。', [
-      { text: 'キャンセル', style: 'cancel' },
-      { text: '削除', style: 'destructive', onPress: () => { onDelete(); onBack(); } },
-    ]);
-  };
-
-  const addItem = (section: InterviewSection) =>
-    setForm(f => ({ ...f, [section]: [...f[section], makeEmptyInterviewQA()] }));
-
-  const updateItem = (section: InterviewSection, id: string, item: InterviewQA) =>
-    setForm(f => ({ ...f, [section]: f[section].map(q => q.id === id ? item : q) }));
-
-  const deleteItem = (section: InterviewSection, id: string) => {
-    Alert.alert('質問を削除', 'この質問とメモを削除しますか？', [
-      { text: 'キャンセル', style: 'cancel' },
-      { text: '削除', style: 'destructive', onPress: () =>
-        setForm(f => ({ ...f, [section]: f[section].filter(q => q.id !== id) }))
-      },
-    ]);
-  };
-
-  return (
-    <View style={esS.root}>
-      <View style={esS.navBar}>
-        <TouchableOpacity onPress={handleBack} style={esS.navBack}>
-          <Text style={esS.navBackText}>＜ 戻る</Text>
-        </TouchableOpacity>
-        <Text style={esS.navTitle} numberOfLines={1}>
-          {companyName ? `${companyName}の面接ノート` : '面接ノート'}
-        </Text>
-        <TouchableOpacity onPress={handleSave} style={esS.navSave}>
-          <Text style={esS.navSaveText}>保存</Text>
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView style={esS.scroll} contentContainerStyle={esS.scrollContent} keyboardShouldPersistTaps="handled">
-        <Text style={esS.sectionTitle}>逆質問の準備</Text>
-        <Text style={ivS.sectionDesc}>
-          面接の最後に自分から聞く質問を準備しておきましょう。意図や聞くタイミングをメモに残せます。
-        </Text>
-        {form.reverseQuestions.length === 0 && (
-          <Text style={esS.emptyQA}>逆質問はまだありません。</Text>
-        )}
-        {form.reverseQuestions.map((item, i) => (
-          <InterviewQAItemView
-            key={item.id}
-            item={item}
-            index={i}
-            questionPlaceholder="例：入社までに勉強しておくべきことはありますか？"
-            memoPlaceholder="質問の意図、どの面接で使うか など"
-            onUpdate={updated => updateItem('reverseQuestions', item.id, updated)}
-            onDelete={() => deleteItem('reverseQuestions', item.id)}
-          />
-        ))}
-        <TouchableOpacity style={esS.addQABtn} onPress={() => addItem('reverseQuestions')}>
-          <Text style={esS.addQABtnText}>＋ 逆質問を追加</Text>
-        </TouchableOpacity>
-
-        <Text style={esS.sectionTitle}>聞かれた質問の記録</Text>
-        <Text style={ivS.sectionDesc}>
-          面接で実際に聞かれた質問と自分の回答・手応えを記録して、次の面接に活かしましょう。
-        </Text>
-        {form.askedQuestions.length === 0 && (
-          <Text style={esS.emptyQA}>記録はまだありません。</Text>
-        )}
-        {form.askedQuestions.map((item, i) => (
-          <InterviewQAItemView
-            key={item.id}
-            item={item}
-            index={i}
-            questionPlaceholder="例：学生時代に最も力を入れたことは？"
-            memoPlaceholder="自分の回答、手応え、次はこう答えたい など"
-            onUpdate={updated => updateItem('askedQuestions', item.id, updated)}
-            onDelete={() => deleteItem('askedQuestions', item.id)}
-          />
-        ))}
-        <TouchableOpacity style={esS.addQABtn} onPress={() => addItem('askedQuestions')}>
-          <Text style={esS.addQABtnText}>＋ 聞かれた質問を追加</Text>
-        </TouchableOpacity>
-
-        {!isNew && (
-          <TouchableOpacity style={esS.deleteBtn} onPress={handleDelete}>
-            <Text style={esS.deleteBtnText}>この面接ノートを削除する</Text>
-          </TouchableOpacity>
-        )}
-
-        <View style={esS.bottomPad} />
-      </ScrollView>
-    </View>
-  );
-}
-
-const ivS = StyleSheet.create({
-  sectionDesc: { fontSize: 12, color: C.sub, marginBottom: 8, lineHeight: 18 },
-});
-
 // ─── JobManagementScreen (root) ───────────────────────────────────────────────
 
 type ViewState =
@@ -3097,8 +2792,7 @@ type ViewState =
   | { mode: 'view'; companyId: string }
   | { mode: 'detail'; companyId: string }
   | { mode: 'new'; draft: Company }
-  | { mode: 'es'; companyId: string; draft: ESItem }
-  | { mode: 'interview'; companyId: string; draft: InterviewSheet };
+  | { mode: 'es'; companyId: string; draft: ESItem };
 
 interface JobManagementScreenProps {
   listResetKey?: number;
@@ -3180,7 +2874,7 @@ function JobManagementScreen({ listResetKey = 0 }: JobManagementScreenProps) {
         getDoc(doc(db, 'users', uid, 'job_settings', 'global_fields')),
       ]).then(([snap, fSnap]) => {
         const loaded = snap.docs.map(d => {
-          const data = d.data() as Partial<Company> & { entrySheets?: unknown[] };
+          const data = d.data() as Partial<Company> & { entrySheets?: unknown[]; interviewSheet?: unknown };
           // 旧フォーマット移行: entrySheets配列の先頭をentrySheetに
           let entrySheet: ESItem | null = null;
           if (isPlainObject(data.entrySheet)) {
@@ -3197,11 +2891,13 @@ function JobManagementScreen({ listResetKey = 0 }: JobManagementScreenProps) {
             selectionStatus: data.selectionStatus ?? '',
             desireLevel: data.desireLevel ?? '',
             tasks: Array.isArray(data.tasks) ? data.tasks : [],
-            interviews: Array.isArray(data.interviews) ? data.interviews.map(normalizeInterview) : [],
+            // 旧「面接ノート」のデータは面接記録に変換して引き継ぐ
+            interviews: Array.isArray(data.interviews) && data.interviews.length > 0
+              ? data.interviews.map(normalizeInterview)
+              : migrateInterviewSheetToRecords(data.interviewSheet),
             globalFieldValues: isPlainObject(data.globalFieldValues) ? toStringRecord(data.globalFieldValues) : {},
             memo: data.memo ?? '',
             entrySheet,
-            interviewSheet: normalizeInterviewSheet(data.interviewSheet),
             progressXp: typeof data.progressXp === 'number' ? data.progressXp : undefined,
             nextInterviewDate: typeof data.nextInterviewDate === 'string' ? data.nextInterviewDate : '',
             nextInterviewTime: typeof data.nextInterviewTime === 'string' ? data.nextInterviewTime : '',
@@ -3300,27 +2996,6 @@ function JobManagementScreen({ listResetKey = 0 }: JobManagementScreenProps) {
     );
   }
 
-  if (view.mode === 'interview') {
-    const company = companies.find(c => c.id === view.companyId);
-    if (!company) return <View style={s.loadingContainer}><ActivityIndicator color={C.primary} /></View>;
-    return (
-      <InterviewSheetScreen
-        sheet={view.draft}
-        isNew={!company.interviewSheet}
-        companyName={company.name}
-        listResetKey={listResetKey}
-        onSave={(updated) => {
-          saveCompany({ ...company, interviewSheet: updated });
-        }}
-        onDelete={() => {
-          saveCompany({ ...company, interviewSheet: null });
-        }}
-        onBack={() => setView({ mode: 'view', companyId: view.companyId })}
-        onListReset={() => setView({ mode: 'list' })}
-      />
-    );
-  }
-
   if (view.mode === 'view') {
     const company = companies.find(c => c.id === view.companyId);
     if (!company) return <View style={s.loadingContainer}><ActivityIndicator color={C.primary} /></View>;
@@ -3340,10 +3015,6 @@ function JobManagementScreen({ listResetKey = 0 }: JobManagementScreenProps) {
         onNavigateToES={() => {
           const draft = company.entrySheet ?? makeEmptyES();
           setView({ mode: 'es', companyId: view.companyId, draft });
-        }}
-        onNavigateToInterview={() => {
-          const draft = company.interviewSheet ?? makeEmptyInterviewSheet();
-          setView({ mode: 'interview', companyId: view.companyId, draft });
         }}
       />
     );
@@ -3379,10 +3050,6 @@ function JobManagementScreen({ listResetKey = 0 }: JobManagementScreenProps) {
         onNavigateToES={(updatedCompany) => {
           const draft = updatedCompany.entrySheet ?? makeEmptyES();
           setView({ mode: 'es', companyId: view.companyId, draft });
-        }}
-        onNavigateToInterview={(updatedCompany) => {
-          const draft = updatedCompany.interviewSheet ?? makeEmptyInterviewSheet();
-          setView({ mode: 'interview', companyId: view.companyId, draft });
         }}
         onBack={() => setView({ mode: 'list' })}
       />
