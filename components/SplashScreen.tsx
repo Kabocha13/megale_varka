@@ -32,7 +32,7 @@ const C = {
 const SCREEN_W = Dimensions.get('window').width;
 const SCREEN_H = Dimensions.get('window').height;
 
-export default function SplashScreen({ onDone, durationMs = 1500 }: Props) {
+export default function SplashScreen({ onDone, durationMs = 800 }: Props) {
   // Fade controllers
   const fade = useRef(new Animated.Value(0)).current;   // whole scene fade-in
   const textFade = useRef(new Animated.Value(0)).current;
@@ -50,22 +50,22 @@ export default function SplashScreen({ onDone, durationMs = 1500 }: Props) {
     // --- Intro timeline ---
     Animated.timing(fade, {
       toValue: 1,
-      duration: 320,
+      duration: 240,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
     Animated.parallel([
       Animated.timing(textFade, {
         toValue: 1,
-        duration: 500,
-        delay: 220,
+        duration: 320,
+        delay: 120,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
       Animated.timing(textSlide, {
         toValue: 0,
-        duration: 500,
-        delay: 220,
+        duration: 320,
+        delay: 120,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
@@ -109,11 +109,11 @@ export default function SplashScreen({ onDone, durationMs = 1500 }: Props) {
     bobLoop.start(); driftLoop.start(); waveLoop.start(); sunLoop.start(); rayLoop.start();
 
     // --- Exit fade-out, then hand back ---
-    const exitDelay = Math.max(0, durationMs - 320);
+    const exitDelay = Math.max(0, durationMs - 240);
     const exit = setTimeout(() => {
       Animated.timing(exitFade, {
         toValue: 0,
-        duration: 320,
+        duration: 240,
         easing: Easing.in(Easing.cubic),
         useNativeDriver: true,
       }).start(() => onDone());

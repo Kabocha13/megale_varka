@@ -35,10 +35,7 @@ import {
   scheduleInterviewEveNotification,
   scheduleTaskNotification,
 } from '../services/notifications';
-import {
-  JOB_COMPANIES_STORAGE_KEY,
-  withUpdatedCompanyProgress,
-} from '../services/jobSearchProgress';
+import { JOB_COMPANIES_STORAGE_KEY } from '../services/jobSearchProgress';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -88,6 +85,7 @@ interface Company {
   name: string;
   myPageUrl: string;
   myPageLoginId: string;
+  myPageLoginPassword: string;
   currentGoal: GoalType | '';
   selectionStatus: string;
   desireLevel: DesireLevel | '';
@@ -96,7 +94,6 @@ interface Company {
   globalFieldValues: Record<string, string>;
   memo: string;
   entrySheet: ESItem | null;
-  progressXp?: number;
   nextInterviewDate: string; // YYYY-MM-DD（未設定は ''）
   nextInterviewTime: string; // HH:mm（未設定は ''）
 }
@@ -220,6 +217,7 @@ function makeEmptyCompany(): Company {
     name: '',
     myPageUrl: '',
     myPageLoginId: '',
+    myPageLoginPassword: '',
     currentGoal: '',
     selectionStatus: '',
     desireLevel: '',
@@ -1273,6 +1271,7 @@ function CompanyViewScreen({ company, globalFields, onEdit, onBack, onToggleTask
           <View style={vS.card}>
             <ViewRow label="マイページURL" value={company.myPageUrl} isUrl />
             <ViewRow label="ログインID" value={company.myPageLoginId} />
+            <PasswordViewRow label="パスワード" value={company.myPageLoginPassword ?? ''} />
             <ViewRow
               label="次回面接"
               value={
@@ -1439,6 +1438,52 @@ function ViewRow({
   );
 }
 
+function PasswordViewRow({
+  label,
+  value,
+  last,
+}: {
+  label: string;
+  value: string;
+  last?: boolean;
+}) {
+  const [visible, setVisible] = useState(false);
+
+  if (!value) {
+    return <ViewRow label={label} value="" last={last} />;
+  }
+
+  return (
+    <View style={[vS.row, last && vS.rowLast]}>
+      <Text style={vS.rowLabel}>{label}</Text>
+      <View style={vS.passwordValueWrap}>
+        <Text style={vS.passwordValueText} numberOfLines={1}>
+          {visible ? value : '••••••••'}
+        </Text>
+        <TouchableOpacity
+          onPress={() => setVisible(v => !v)}
+          hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+          accessibilityRole="button"
+          accessibilityLabel={visible ? 'パスワードを隠す' : 'パスワードを表示'}
+        >
+          <MaterialIcons name={visible ? 'visibility-off' : 'visibility'} size={18} color={C.sub} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => {
+            Clipboard.setString(value);
+            Alert.alert('コピーしました', 'パスワードをクリップボードにコピーしました。');
+          }}
+          hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+          accessibilityRole="button"
+          accessibilityLabel="パスワードをコピー"
+        >
+          <MaterialIcons name="content-copy" size={18} color={C.sub} />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
 function ViewTask({
   task,
   last,
@@ -1526,6 +1571,8 @@ const vS = StyleSheet.create({
   rowLabel: { fontSize: 13, color: C.sub, flex: 1 },
   rowValue: { fontSize: 14, color: C.text, flex: 2, textAlign: 'right' },
   rowValueLink: { fontSize: 14, color: C.primary, textDecorationLine: 'underline', flex: 2, textAlign: 'right' },
+  passwordValueWrap: { flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 10 },
+  passwordValueText: { fontSize: 14, color: C.text, flexShrink: 1, textAlign: 'right' },
   memoText: { fontSize: 14, color: C.text, paddingHorizontal: 16, paddingVertical: 12, lineHeight: 22 },
   emptyText: { fontSize: 13, color: C.muted, textAlign: 'center', paddingVertical: 8 },
   taskRow: {
@@ -1922,6 +1969,7 @@ function CompanyDetailScreen({ company, isNew, globalFields, listResetKey = 0, o
   const [form, setForm] = useState<Company>(company);
   const [picker, setPicker] = useState<'goal' | 'desire' | 'status' | null>(null);
   const [showGlobalFieldsModal, setShowGlobalFieldsModal] = useState(false);
+  const [showMyPagePassword, setShowMyPagePassword] = useState(false);
   const originalRef = useRef(JSON.stringify(company));
   const listResetKeyRef = useRef(listResetKey);
 
@@ -2050,6 +2098,32 @@ function CompanyDetailScreen({ company, isNew, globalFields, listResetKey = 0, o
             placeholderTextColor={C.muted}
             autoCapitalize="none"
           />
+
+          <Text style={dS.fieldLabel}>マイページパスワード</Text>
+          <View style={dS.passwordRow}>
+            <TextInput
+              style={[dS.input, dS.passwordInput]}
+              value={form.myPageLoginPassword}
+              onChangeText={v => set('myPageLoginPassword', v)}
+              placeholder="マイページのパスワード"
+              placeholderTextColor={C.muted}
+              autoCapitalize="none"
+              autoCorrect={false}
+              secureTextEntry={!showMyPagePassword}
+            />
+            <TouchableOpacity
+              style={dS.passwordToggle}
+              onPress={() => setShowMyPagePassword(v => !v)}
+              accessibilityRole="button"
+              accessibilityLabel={showMyPagePassword ? 'パスワードを隠す' : 'パスワードを表示'}
+            >
+              <MaterialIcons
+                name={showMyPagePassword ? 'visibility-off' : 'visibility'}
+                size={20}
+                color={C.sub}
+              />
+            </TouchableOpacity>
+          </View>
 
           <SelectField
             label="現目標"
@@ -2185,7 +2259,7 @@ function CompanyDetailScreen({ company, isNew, globalFields, listResetKey = 0, o
             style={[dS.input, dS.inputMemo]}
             value={form.memo ?? ''}
             onChangeText={v => set('memo', v)}
-            placeholder="自由にメモを残せます"
+            placeholder="自由に企業研究などの情報を残せます"
             placeholderTextColor={C.muted}
             multiline
             textAlignVertical="top"
@@ -2317,6 +2391,14 @@ const dS = StyleSheet.create({
   },
   inputMulti: { minHeight: 72, textAlignVertical: 'top' },
   inputMemo: { minHeight: 100, textAlignVertical: 'top' },
+  passwordRow: { flexDirection: 'row', alignItems: 'center' },
+  passwordInput: { flex: 1, paddingRight: 44 },
+  passwordToggle: {
+    position: 'absolute',
+    right: 0,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
   esHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2887,6 +2969,7 @@ function JobManagementScreen({ listResetKey = 0 }: JobManagementScreenProps) {
             name: data.name ?? '',
             myPageUrl: data.myPageUrl ?? '',
             myPageLoginId: data.myPageLoginId ?? '',
+            myPageLoginPassword: data.myPageLoginPassword ?? '',
             currentGoal: data.currentGoal ?? '',
             selectionStatus: data.selectionStatus ?? '',
             desireLevel: data.desireLevel ?? '',
@@ -2898,7 +2981,6 @@ function JobManagementScreen({ listResetKey = 0 }: JobManagementScreenProps) {
             globalFieldValues: isPlainObject(data.globalFieldValues) ? toStringRecord(data.globalFieldValues) : {},
             memo: data.memo ?? '',
             entrySheet,
-            progressXp: typeof data.progressXp === 'number' ? data.progressXp : undefined,
             nextInterviewDate: typeof data.nextInterviewDate === 'string' ? data.nextInterviewDate : '',
             nextInterviewTime: typeof data.nextInterviewTime === 'string' ? data.nextInterviewTime : '',
           } as Company;
@@ -2921,23 +3003,18 @@ function JobManagementScreen({ listResetKey = 0 }: JobManagementScreenProps) {
 
   // 企業を保存（追加・更新）
   const saveCompany = useCallback((company: Company) => {
-    const existingCompany = companies.find(c => c.id === company.id);
-    const nextCompany = withUpdatedCompanyProgress({
-      ...company,
-      progressXp: Math.max(company.progressXp ?? 0, existingCompany?.progressXp ?? 0),
-    });
     setCompanies(prev => {
-      const next = prev.find(c => c.id === nextCompany.id)
-        ? prev.map(c => c.id === nextCompany.id ? nextCompany : c)
-        : [...prev, nextCompany];
+      const next = prev.find(c => c.id === company.id)
+        ? prev.map(c => c.id === company.id ? company : c)
+        : [...prev, company];
       if (isDemo) AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => {});
       return next;
     });
     if (!isDemo && uid) {
-      setDoc(doc(db, 'users', uid, 'job_companies', nextCompany.id), nextCompany).catch(() => {});
+      setDoc(doc(db, 'users', uid, 'job_companies', company.id), company).catch(() => {});
     }
-    syncNotifications(nextCompany);
-  }, [uid, isDemo, companies, syncNotifications]);
+    syncNotifications(company);
+  }, [uid, isDemo, syncNotifications]);
 
   // 企業を削除
   const removeCompany = useCallback((companyId: string, tasks: Task[]) => {
