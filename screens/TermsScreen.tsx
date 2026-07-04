@@ -1,5 +1,6 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { TERMS_SECTIONS, TERMS_UPDATED_AT } from '../services/terms';
 
 interface TermsScreenProps {
@@ -11,13 +12,14 @@ interface TermsScreenProps {
 
 export default function TermsScreen({ mode, onAccept, onClose }: TermsScreenProps) {
   return (
-    <View style={s.root}>
+    <SafeAreaView style={s.root} edges={['top', 'bottom', 'left', 'right']}>
       <View style={s.header}>
         <Text style={s.headerTitle}>利用規約</Text>
         {mode === 'view' && (
           <TouchableOpacity
             style={s.closeBtn}
             onPress={onClose}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             accessibilityRole="button"
             accessibilityLabel="利用規約を閉じる"
           >
@@ -51,7 +53,7 @@ export default function TermsScreen({ mode, onAccept, onClose }: TermsScreenProp
           </TouchableOpacity>
         </View>
       )}
-    </View>
+    </SafeAreaView>
   );
 }
 

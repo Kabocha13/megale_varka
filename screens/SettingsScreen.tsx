@@ -17,6 +17,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import TermsScreen from './TermsScreen';
 import {
@@ -636,11 +637,12 @@ export default function SettingsScreen() {
 
       {/* 運営からのお知らせ */}
       <Modal visible={showAnnouncements} animationType="slide" onRequestClose={handleCloseAnnouncements}>
-        <View style={s.fullModalRoot}>
+        <SafeAreaView style={s.fullModalRoot} edges={['top', 'bottom', 'left', 'right']}>
           <View style={s.fullModalHeader}>
             <Text style={s.fullModalTitle}>運営からのお知らせ</Text>
             <TouchableOpacity
               onPress={handleCloseAnnouncements}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               accessibilityRole="button"
               accessibilityLabel="お知らせを閉じる"
             >
@@ -670,16 +672,17 @@ export default function SettingsScreen() {
               })
             )}
           </ScrollView>
-        </View>
+        </SafeAreaView>
       </Modal>
 
       {/* お問い合わせフォーム */}
       <Modal visible={showInquiry} animationType="slide" onRequestClose={() => setShowInquiry(false)}>
-        <View style={s.fullModalRoot}>
+        <SafeAreaView style={s.fullModalRoot} edges={['top', 'bottom', 'left', 'right']}>
           <View style={s.fullModalHeader}>
             <Text style={s.fullModalTitle}>お問い合わせ</Text>
             <TouchableOpacity
               onPress={() => setShowInquiry(false)}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               accessibilityRole="button"
               accessibilityLabel="お問い合わせフォームを閉じる"
             >
@@ -739,7 +742,7 @@ export default function SettingsScreen() {
               <Text style={s.inquiryMailLinkText}>メールアプリで問い合わせる（{SUPPORT_EMAIL}）</Text>
             </TouchableOpacity>
           </ScrollView>
-        </View>
+        </SafeAreaView>
       </Modal>
 
       {/* 利用規約 */}
