@@ -73,8 +73,9 @@ interface InterviewRecord {
 interface InternRecord {
   id: string;
   title: string;   // 夏インターン・1dayなど（任意）
-  date: string;    // YYYY-MM-DD（未設定は空文字）
-  time: string;    // HH:mm（未設定は空文字）
+  date: string;    // 開始日 YYYY-MM-DD（未設定は空文字）
+  endDate: string; // 終了日 YYYY-MM-DD（1日のみの場合は空文字）
+  time: string;    // 開始時刻 HH:mm（未設定は空文字）
   note: string;    // 持ち物・内容・感想などの自由記述
 }
 
@@ -271,7 +272,7 @@ function makeEmptyInterview(): InterviewRecord {
 }
 
 function makeEmptyIntern(): InternRecord {
-  return { id: makeUid(), title: '', date: '', time: '', note: '' };
+  return { id: makeUid(), title: '', date: '', endDate: '', time: '', note: '' };
 }
 
 function normalizeIntern(data: unknown): InternRecord {
@@ -280,9 +281,26 @@ function normalizeIntern(data: unknown): InternRecord {
     id: typeof d.id === 'string' && d.id ? d.id : makeUid(),
     title: typeof d.title === 'string' ? d.title : '',
     date: typeof d.date === 'string' ? d.date : '',
+    endDate: typeof d.endDate === 'string' ? d.endDate : '',
     time: typeof d.time === 'string' ? d.time : '',
     note: typeof d.note === 'string' ? d.note : '',
   };
+}
+
+// インターンの実質的な最終日（終了日が未設定なら開始日）
+function internLastDate(rec: InternRecord): string {
+  return rec.endDate && rec.endDate > rec.date ? rec.endDate : rec.date;
+}
+
+// 「7月1日 10:00 〜 7月3日」のような期間表示
+function displayInternPeriod(rec: InternRecord): string {
+  if (!rec.date) return '';
+  const start = `${displayDate(rec.date)}${rec.time ? ` ${rec.time}` : ''}`;
+  const end = rec.endDate;
+  if (end && end !== rec.date) {
+    return `${start} 〜 ${displayDate(end)}`;
+  }
+  return start;
 }
 
 function normalizeInterview(data: unknown): InterviewRecord {
@@ -1093,9 +1111,7 @@ function InternItem({ intern, onUpdate, onDelete }: InternItemProps) {
           {intern.note || '（メモ未入力）'}
         </Text>
         {intern.date ? (
-          <Text style={irS.date}>
-            {displayDate(intern.date)}{intern.time ? ` ${intern.time}` : ''}
-          </Text>
+          <Text style={irS.date}>{displayInternPeriod(intern)}</Text>
         ) : null}
         <Text style={irS.chevron}>{expanded ? '▲' : '▼'}</Text>
       </TouchableOpacity>
@@ -1111,12 +1127,20 @@ function InternItem({ intern, onUpdate, onDelete }: InternItemProps) {
             placeholderTextColor={C.muted}
           />
 
-          <Text style={irS.label}>日程</Text>
+          <Text style={irS.label}>開始日・開始時刻</Text>
           <View style={inS.dateRow}>
             <View style={inS.dateCol}>
               <DatePickerField
                 value={intern.date}
-                onChange={v => onUpdate({ ...intern, date: v, time: intern.time || '10:00' })}
+                onChange={v =>
+                  onUpdate({
+                    ...intern,
+                    date: v,
+                    // 終了日が開始日より前になったら開始日に合わせる
+                    endDate: intern.endDate && intern.endDate < v ? v : intern.endDate,
+                    time: intern.time || '10:00',
+                  })
+                }
                 allowPast
               />
             </View>
@@ -1127,8 +1151,29 @@ function InternItem({ intern, onUpdate, onDelete }: InternItemProps) {
               />
             </View>
           </View>
+
+          <View style={inS.endLabelRow}>
+            <Text style={irS.label}>終了日（複数日にわたる場合）</Text>
+            {!!intern.endDate && (
+              <TouchableOpacity
+                onPress={() => onUpdate({ ...intern, endDate: '' })}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={inS.endClearText}>クリア</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          <DatePickerField
+            value={intern.endDate}
+            onChange={v =>
+              // 開始日より前は選べない（開始日未設定ならそのまま採用）
+              onUpdate({ ...intern, endDate: intern.date && v < intern.date ? intern.date : v })
+            }
+            allowPast
+          />
+
           {!!intern.date && intern.date >= formatDate(new Date()) && (
-            <Text style={inS.eveNote}>前日の21:00にリマインダー通知が届きます</Text>
+            <Text style={inS.eveNote}>開始日前日の21:00にリマインダー通知が届きます</Text>
           )}
 
           <Text style={irS.label}>メモ（自由記述）</Text>
@@ -1164,6 +1209,12 @@ const inS = StyleSheet.create({
   dateCol: { flex: 1.5 },
   timeCol: { flex: 1 },
   eveNote: { fontSize: 11, color: C.light, marginTop: 6 },
+  endLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+  },
+  endClearText: { fontSize: 12, color: C.danger },
 });
 
 // ─── SearchFilterModal ────────────────────────────────────────────────────────
@@ -1551,9 +1602,7 @@ function CompanyViewScreen({ company, globalFields, onEdit, onBack, onToggleTask
                       <Text style={ivVS.stageBadgeText}>{rec.title || 'インターン'}</Text>
                     </View>
                     {rec.date ? (
-                      <Text style={ivVS.date}>
-                        {displayDate(rec.date)}{rec.time ? ` ${rec.time}` : ''}
-                      </Text>
+                      <Text style={ivVS.date}>{displayInternPeriod(rec)}</Text>
                     ) : null}
                   </View>
                   <Text style={ivVS.note}>{rec.note || '（メモ未入力）'}</Text>
@@ -1884,15 +1933,20 @@ const ivVS = StyleSheet.create({
 // ─── UpcomingInternChip ───────────────────────────────────────────────────────
 
 function UpcomingInternChip({ interns }: { interns: InternRecord[] | undefined }) {
+  const today = formatDate(new Date());
+  // 開催中（複数日の途中）または今後のインターンを対象にする
   const upcoming = (interns ?? [])
-    .filter(r => !!r.date && r.date >= formatDate(new Date()))
+    .filter(r => !!r.date && internLastDate(r) >= today)
     .sort((a, b) => a.date.localeCompare(b.date))[0];
   if (!upcoming) return null;
+  const ongoing = upcoming.date <= today;
   return (
     <View style={lS.internChip}>
       <MaterialIcons name="business-center" size={13} color="#2E7D32" />
       <Text style={lS.internChipText}>
-        インターン {displayDate(upcoming.date)}{upcoming.time ? ` ${upcoming.time}` : ''}
+        {ongoing
+          ? `インターン開催中（〜${displayDate(internLastDate(upcoming))}）`
+          : `インターン ${displayInternPeriod(upcoming)}`}
       </Text>
     </View>
   );
