@@ -1,6 +1,6 @@
 import React from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TERMS_SECTIONS, TERMS_UPDATED_AT } from '../services/terms';
 
 interface TermsScreenProps {
@@ -8,13 +8,37 @@ interface TermsScreenProps {
   mode: 'accept' | 'view';
   onAccept?: () => void;
   onClose?: () => void;
+  topInset?: number;
+  bottomInset?: number;
 }
 
-export default function TermsScreen({ mode, onAccept, onClose }: TermsScreenProps) {
+export default function TermsScreen({ mode, onAccept, onClose, topInset, bottomInset }: TermsScreenProps) {
+  const insets = useSafeAreaInsets();
+  const safeTop = topInset ?? insets.top;
+  const safeBottom = bottomInset ?? insets.bottom;
+  const { height } = useWindowDimensions();
+  const isCompactHeight = height < 700;
+  const headerVerticalPadding = isCompactHeight ? 8 : 12;
+  const headerStyle = [
+    s.header,
+    {
+      paddingTop: safeTop + headerVerticalPadding,
+      paddingBottom: headerVerticalPadding,
+    },
+  ];
+  const contentStyle = [
+    s.content,
+    { paddingBottom: mode === 'accept' ? 24 : Math.max(32, safeBottom + 24) },
+  ];
+  const footerStyle = [
+    s.footer,
+    { paddingBottom: Math.max(16, safeBottom + 16) },
+  ];
+
   return (
-    <SafeAreaView style={s.root} edges={['top', 'bottom', 'left', 'right']}>
-      <View style={s.header}>
-        <Text style={s.headerTitle}>利用規約</Text>
+    <SafeAreaView style={s.root} edges={['left', 'right']}>
+      <View style={headerStyle}>
+        <Text style={s.headerTitle} numberOfLines={1}>利用規約</Text>
         {mode === 'view' && (
           <TouchableOpacity
             style={s.closeBtn}
@@ -28,7 +52,7 @@ export default function TermsScreen({ mode, onAccept, onClose }: TermsScreenProp
         )}
       </View>
 
-      <ScrollView style={s.scroll} contentContainerStyle={s.content}>
+      <ScrollView style={s.scroll} contentContainerStyle={contentStyle}>
         <Text style={s.updatedAt}>最終改定日：{TERMS_UPDATED_AT}</Text>
         {TERMS_SECTIONS.map(section => (
           <View key={section.heading} style={s.section}>
@@ -39,7 +63,7 @@ export default function TermsScreen({ mode, onAccept, onClose }: TermsScreenProp
       </ScrollView>
 
       {mode === 'accept' && (
-        <View style={s.footer}>
+        <View style={footerStyle}>
           <Text style={s.footerNote}>
             上記の利用規約に同意のうえ、アプリのご利用を開始してください。
           </Text>
@@ -78,11 +102,17 @@ const s = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: C.border,
   },
-  headerTitle: { fontSize: 18, fontWeight: 'bold', color: C.primary },
-  closeBtn: { paddingHorizontal: 8, paddingVertical: 4 },
+  headerTitle: { flex: 1, fontSize: 18, fontWeight: 'bold', color: C.primary },
+  closeBtn: {
+    minWidth: 64,
+    minHeight: 44,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
   closeBtnText: { color: C.primary, fontSize: 15 },
   scroll: { flex: 1 },
-  content: { padding: 20, paddingBottom: 32 },
+  content: { padding: 20 },
   updatedAt: { fontSize: 12, color: C.sub, marginBottom: 16 },
   section: { marginBottom: 18 },
   heading: { fontSize: 15, fontWeight: 'bold', color: C.text, marginBottom: 6 },

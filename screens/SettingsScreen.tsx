@@ -15,9 +15,10 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import TermsScreen from './TermsScreen';
 import {
@@ -112,6 +113,21 @@ const DEMO_ANNOUNCEMENTS: Announcement[] = [
 
 export default function SettingsScreen() {
   const { uid, email, isDemo, logout } = useAuth();
+  const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
+  const isCompactHeight = height < 700;
+  const modalHeaderVerticalPadding = isCompactHeight ? 8 : 12;
+  const modalHeaderStyle = [
+    s.fullModalHeader,
+    {
+      paddingTop: insets.top + modalHeaderVerticalPadding,
+      paddingBottom: modalHeaderVerticalPadding,
+    },
+  ];
+  const modalContentStyle = [
+    s.fullModalContent,
+    { paddingBottom: Math.max(40, insets.bottom + 24) },
+  ];
   const [reminderDays, setReminderDays] = useState<number[]>(DEFAULT_REMINDER_DAYS);
   const [showPicker, setShowPicker] = useState(false);
   const [draft, setDraft] = useState<number[]>(DEFAULT_REMINDER_DAYS);
@@ -637,10 +653,11 @@ export default function SettingsScreen() {
 
       {/* 運営からのお知らせ */}
       <Modal visible={showAnnouncements} animationType="slide" onRequestClose={handleCloseAnnouncements}>
-        <SafeAreaView style={s.fullModalRoot} edges={['top', 'bottom', 'left', 'right']}>
-          <View style={s.fullModalHeader}>
-            <Text style={s.fullModalTitle}>運営からのお知らせ</Text>
+        <SafeAreaView style={s.fullModalRoot} edges={['left', 'right']}>
+          <View style={modalHeaderStyle}>
+            <Text style={s.fullModalTitle} numberOfLines={1}>運営からのお知らせ</Text>
             <TouchableOpacity
+              style={s.fullModalCloseBtn}
               onPress={handleCloseAnnouncements}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               accessibilityRole="button"
@@ -649,7 +666,7 @@ export default function SettingsScreen() {
               <Text style={s.fullModalClose}>閉じる</Text>
             </TouchableOpacity>
           </View>
-          <ScrollView style={s.fullModalScroll} contentContainerStyle={s.fullModalContent}>
+          <ScrollView style={s.fullModalScroll} contentContainerStyle={modalContentStyle}>
             {announcements.length === 0 ? (
               <Text style={s.announceEmpty}>現在お知らせはありません</Text>
             ) : (
@@ -677,10 +694,11 @@ export default function SettingsScreen() {
 
       {/* お問い合わせフォーム */}
       <Modal visible={showInquiry} animationType="slide" onRequestClose={() => setShowInquiry(false)}>
-        <SafeAreaView style={s.fullModalRoot} edges={['top', 'bottom', 'left', 'right']}>
-          <View style={s.fullModalHeader}>
-            <Text style={s.fullModalTitle}>お問い合わせ</Text>
+        <SafeAreaView style={s.fullModalRoot} edges={['left', 'right']}>
+          <View style={modalHeaderStyle}>
+            <Text style={s.fullModalTitle} numberOfLines={1}>お問い合わせ</Text>
             <TouchableOpacity
+              style={s.fullModalCloseBtn}
               onPress={() => setShowInquiry(false)}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               accessibilityRole="button"
@@ -691,7 +709,7 @@ export default function SettingsScreen() {
           </View>
           <ScrollView
             style={s.fullModalScroll}
-            contentContainerStyle={s.fullModalContent}
+            contentContainerStyle={modalContentStyle}
             keyboardShouldPersistTaps="handled"
           >
             <Text style={s.inquiryLabel}>お問い合わせの種類</Text>
@@ -747,7 +765,12 @@ export default function SettingsScreen() {
 
       {/* 利用規約 */}
       <Modal visible={showTerms} animationType="slide" onRequestClose={() => setShowTerms(false)}>
-        <TermsScreen mode="view" onClose={() => setShowTerms(false)} />
+        <TermsScreen
+          mode="view"
+          onClose={() => setShowTerms(false)}
+          topInset={insets.top}
+          bottomInset={insets.bottom}
+        />
       </Modal>
 
       {/* リマインド日数ピッカー（複数選択） */}
@@ -1012,6 +1035,13 @@ const s = StyleSheet.create({
     borderBottomColor: C.border,
   },
   fullModalTitle: { fontSize: 17, fontWeight: 'bold', color: C.primary },
+  fullModalCloseBtn: {
+    minWidth: 64,
+    minHeight: 44,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
   fullModalClose: { fontSize: 15, color: C.primary },
   fullModalScroll: { flex: 1 },
   fullModalContent: { padding: 16, paddingBottom: 40 },

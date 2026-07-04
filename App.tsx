@@ -183,10 +183,10 @@ function App() {
   return (
     <SafeAreaProvider>
       {termsAccepted === false ? (
-        <SafeAreaView style={styles.container}>
+        <View style={styles.container}>
           <StatusBar barStyle="dark-content" />
           <TermsScreen mode="accept" onAccept={handleAcceptTerms} />
-        </SafeAreaView>
+        </View>
       ) : termsAccepted === true ? (
         <AppLockGate>
           <AuthProvider>
