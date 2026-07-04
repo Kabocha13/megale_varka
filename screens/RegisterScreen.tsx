@@ -80,8 +80,9 @@ function RegisterScreen({ onNavigateToLogin }: Props) {
         editable={!submitting}
       />
 
-      <Text style={styles.passwordHint}>
-        6文字以上で、大文字・小文字・数字をそれぞれ1文字以上含めてください。
+      <Text style={[styles.passwordHint, password.length > 0 && validatePassword(password) !== null && styles.passwordHintError]}>
+        パスワードは6文字以上で、大文字・小文字・数字をそれぞれ1文字以上含めてください
+        {password.length > 0 && password.length < 6 ? `（あと${6 - password.length}文字）` : ''}
       </Text>
 
       <TouchableOpacity
@@ -130,9 +131,12 @@ const styles = StyleSheet.create({
   passwordHint: {
     width: '100%',
     fontSize: 12,
-    color: '#555555',
+    color: '#888888',
     marginTop: -8,
     marginBottom: 8,
+  },
+  passwordHintError: {
+    color: '#E53935',
   },
   button: {
     width: '100%',

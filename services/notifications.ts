@@ -143,6 +143,65 @@ export async function cancelTaskNotification(taskId: string): Promise<void> {
   );
 }
 
+// ─── 面接前夜リマインダー ─────────────────────────────────────────────────────
+
+const INTERVIEW_EVE_CHANNEL_ID = 'interview_eve';
+const INTERVIEW_EVE_HOUR = 21;
+
+async function ensureInterviewEveChannel(): Promise<string> {
+  await notifee.createChannel({
+    id: INTERVIEW_EVE_CHANNEL_ID,
+    name: '面接前夜リマインダー',
+    importance: AndroidImportance.HIGH,
+  });
+  return INTERVIEW_EVE_CHANNEL_ID;
+}
+
+/**
+ * 面接前日の21:00に「早めの就寝」を促す通知をスケジュールする。
+ * 前日21:00がすでに過ぎている場合は何もしない。
+ */
+export async function scheduleInterviewEveNotification(
+  companyId: string,
+  companyName: string,
+  interviewDate: string, // YYYY-MM-DD
+  interviewTime: string, // HH:mm（不明な場合は ''）
+): Promise<void> {
+  await cancelInterviewEveNotification(companyId);
+
+  const parts = interviewDate.split('-').map(Number);
+  if (parts.length !== 3 || parts.some(isNaN)) return;
+  const [year, month, day] = parts;
+
+  const eve = new Date(year, month - 1, day - 1, INTERVIEW_EVE_HOUR, 0, 0);
+  if (eve.getTime() <= Date.now()) return;
+
+  const channelId = await ensureInterviewEveChannel();
+  const timeLabel = /^([01]?\d|2[0-3]):[0-5]\d$/.test(interviewTime)
+    ? `${interviewTime}から`
+    : '';
+
+  const trigger: TimestampTrigger = {
+    type: TriggerType.TIMESTAMP,
+    timestamp: eve.getTime(),
+  };
+
+  await notifee.createTriggerNotification(
+    {
+      id: `interview_eve_${companyId}`,
+      title: `明日は${companyName || '企業'}の面接です`,
+      body: `明日${timeLabel}面接があります。今夜は早めに就寝して、ベストコンディションで臨みましょう。`,
+      android: { channelId, importance: AndroidImportance.HIGH },
+      ios: { sound: 'default' },
+    },
+    trigger,
+  );
+}
+
+export async function cancelInterviewEveNotification(companyId: string): Promise<void> {
+  await notifee.cancelTriggerNotification(`interview_eve_${companyId}`).catch(() => {});
+}
+
 // ─── 毎日ヘルス記録リマインダー ───────────────────────────────────────────────
 
 export async function getDailyReminderConfig(): Promise<DailyReminderConfig> {
