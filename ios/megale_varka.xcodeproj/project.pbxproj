@@ -14,6 +14,7 @@
 		320F23FE2F973E7F00421B18 /* StreakWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 320F23EB2F973E7E00421B18 /* StreakWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		320F241D2F9741F100421B18 /* StreakBridgeModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 320F241C2F9741F100421B18 /* StreakBridgeModule.m */; };
 		320F24212F9743EE00421B18 /* StreakBridgeModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 320F241F2F9741F800421B18 /* StreakBridgeModule.swift */; };
+		4F5A9D2C7E1B4A0F9C8D6E01 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 4F5A9D2C7E1B4A0F9C8D6E00 /* GoogleService-Info.plist */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
 		855D6E8547C0C0E770A70D65 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
@@ -56,6 +57,7 @@
 		320F241E2F9741F600421B18 /* megale_varka-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "megale_varka-Bridging-Header.h"; sourceTree = "<group>"; };
 		320F241F2F9741F800421B18 /* StreakBridgeModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreakBridgeModule.swift; sourceTree = "<group>"; };
 		3B4392A12AC88292D35C810B /* Pods-megale_varka.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-megale_varka.debug.xcconfig"; path = "Target Support Files/Pods-megale_varka/Pods-megale_varka.debug.xcconfig"; sourceTree = "<group>"; };
+		4F5A9D2C7E1B4A0F9C8D6E00 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		5709B34CF0A7D63546082F79 /* Pods-megale_varka.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-megale_varka.release.xcconfig"; path = "Target Support Files/Pods-megale_varka/Pods-megale_varka.release.xcconfig"; sourceTree = "<group>"; };
 		5DCACB8F33CDC322A6C60F78 /* libPods-megale_varka.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-megale_varka.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = megale_varka/AppDelegate.swift; sourceTree = "<group>"; };
@@ -106,6 +108,7 @@
 				761780EC2CA45674006654EE /* AppDelegate.swift */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */,
+				4F5A9D2C7E1B4A0F9C8D6E00 /* GoogleService-Info.plist */,
 				13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */,
 				AA00BB11CC22DD33EE440001 /* megale_varka.entitlements */,
 			);
@@ -265,6 +268,7 @@
 			files = (
 				81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
+				4F5A9D2C7E1B4A0F9C8D6E01 /* GoogleService-Info.plist in Resources */,
 				855D6E8547C0C0E770A70D65 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
