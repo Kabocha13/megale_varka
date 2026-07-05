@@ -23,22 +23,6 @@ bundle exec pod install
 ## ソーシャルログイン（Google / Apple）のセットアップ
 
 コード側は実装済みです。ビルド前に以下の設定が必要です。
-
-**共通（Firebase Console）**
-
-1. Authentication > ログイン方法 で「Google」「Apple」を有効化
-2. Google のウェブクライアントIDを `.env` の `GOOGLE_WEB_CLIENT_ID` に設定
-
-**iOS（Googleログイン）**
-
-1. `bundle exec pod install` を再実行（ネイティブモジュールの追加のため）
-2. Firebase Console で Google プロバイダを有効化した**あとに** iOS 用 `GoogleService-Info.plist` を再ダウンロードし、
-   Xcode のファイル一覧の `megale_varka` フォルダにドラッグ＆ドロップして追加
-   （Copy items if needed / Add to targets: megale_varka にチェック。
-   有効化後の plist には `CLIENT_ID` / `REVERSED_CLIENT_ID` が含まれます）
-3. Xcode で TARGETS > megale_varka > Info > URL Types に、plist 内の `REVERSED_CLIENT_ID` の値を
-   URL Schemes として追加（Googleログインのコールバック用）
-
 **iOS（Appleログイン）**
 
 Sign in with Apple は**有料の Apple Developer Program 加入が必須**です
