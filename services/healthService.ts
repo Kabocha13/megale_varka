@@ -78,13 +78,16 @@ export async function fetchHealthKitDataForDate(dateStr: string): Promise<Health
   const dayStart = new Date(y, m - 1, d, 0, 0, 0, 0);
   const dayEnd = new Date(y, m - 1, d, 23, 59, 59, 999);
 
-  // Sleep window: the previous day 16:00 → target day 12:00
-  // (captures the overnight sleep that ended on the morning of the target day)
-  const sleepEnd = new Date(y, m - 1, d, 12, 0, 0, 0);
-  const sleepStart = new Date(sleepEnd.getTime() - 20 * 60 * 60 * 1000);
+  // Sleep window: the previous day 12:00 → target day 18:00. Wide enough to
+  // catch early bedtimes and wake-ups past noon, but ends before the target
+  // day's own night so retroactive entries don't pick up the following night.
+  // The main sleep session inside the window is selected by
+  // pickMainSleepSession, so evening naps no longer skew bed/wake times.
+  const sleepWindowStart = new Date(y, m - 1, d - 1, 12, 0, 0, 0);
+  const sleepWindowEnd = new Date(y, m - 1, d, 18, 0, 0, 0);
 
   const [sleepResult, stepsResult, caloriesResult] = await Promise.allSettled([
-    getSleepInfo(sleepStart, sleepEnd),
+    getSleepInfo(sleepWindowStart, sleepWindowEnd, dayStart),
     getStepCount(dayStart, dayEnd),
     getActiveCalories(dayStart, dayEnd),
   ]);
@@ -102,33 +105,92 @@ export async function fetchHealthKitDataForDate(dateStr: string): Promise<Health
 // HealthKit sleep values: 0=inBed, 1=asleep(legacy), 2=awake, 3=asleepCore, 4=asleepDeep, 5=asleepREM
 const SLEEP_VALUES = new Set([1, 3, 4, 5]);
 
-interface SleepInfo {
-  hours: number;
-  startDate: Date;   // earliest "asleep" sample start
-  endDate: Date;     // latest "asleep" sample end
+// Asleep samples separated by a gap of at least this long belong to
+// different sleep sessions (e.g. an evening nap vs. the overnight sleep).
+const SESSION_GAP_MS = 90 * 60 * 1000;
+
+export interface SleepSample {
+  startDate: Date;
+  endDate: Date;
+  value: number;
 }
 
-async function getSleepInfo(startDate: Date, endDate: Date): Promise<SleepInfo | null> {
+interface SleepInfo {
+  hours: number;     // actual asleep time within the main session
+  startDate: Date;   // main session start (bed time)
+  endDate: Date;     // main session end (wake time)
+}
+
+/**
+ * Picks the main sleep session for the day starting at `dayStart` from raw
+ * HealthKit sleep samples.
+ *
+ * Overlapping samples (e.g. iPhone and Apple Watch both recording) are merged
+ * so time isn't double-counted, then the merged intervals are grouped into
+ * sessions wherever the awake gap is >= 90 minutes. Sessions that end on the
+ * target day are preferred (the overnight sleep the record is about); among
+ * those the longest wins. If no session ends on the target day, the longest
+ * session overall is used.
+ */
+export function pickMainSleepSession(
+  samples: SleepSample[],
+  dayStart: Date,
+): SleepInfo | null {
+  const intervals = samples
+    .filter(s =>
+      SLEEP_VALUES.has(s.value) &&
+      s.endDate.getTime() > s.startDate.getTime(),
+    )
+    .map(s => ({ start: s.startDate.getTime(), end: s.endDate.getTime() }))
+    .sort((a, b) => a.start - b.start);
+  if (!intervals.length) { return null; }
+
+  // Merge overlaps (multi-source dedup), splitting into sessions at big gaps.
+  interface Session { start: number; end: number; asleepMs: number }
+  const sessions: Session[] = [];
+  let cur: Session | null = null;
+  let curIntervalEnd = 0;
+  for (const iv of intervals) {
+    if (cur && iv.start - curIntervalEnd < SESSION_GAP_MS) {
+      const overlap = Math.max(0, curIntervalEnd - iv.start);
+      cur.asleepMs += Math.max(0, iv.end - iv.start - overlap);
+      cur.end = Math.max(cur.end, iv.end);
+      curIntervalEnd = Math.max(curIntervalEnd, iv.end);
+    } else {
+      cur = { start: iv.start, end: iv.end, asleepMs: iv.end - iv.start };
+      sessions.push(cur);
+      curIntervalEnd = iv.end;
+    }
+  }
+
+  const endsOnDay = sessions.filter(s => s.end >= dayStart.getTime());
+  const candidates = endsOnDay.length ? endsOnDay : sessions;
+  const main = candidates.reduce((a, b) => (b.asleepMs > a.asleepMs ? b : a));
+  if (main.asleepMs <= 0) { return null; }
+  return {
+    hours: main.asleepMs / 3_600_000,
+    startDate: new Date(main.start),
+    endDate: new Date(main.end),
+  };
+}
+
+async function getSleepInfo(
+  startDate: Date,
+  endDate: Date,
+  dayStart: Date,
+): Promise<SleepInfo | null> {
   const samples = await queryCategorySamples('HKCategoryTypeIdentifierSleepAnalysis', {
     filter: { date: { startDate, endDate } },
     limit: 1000,
   });
-  if (!samples.length) { return null; }
-  let ms = 0;
-  let earliest: Date | null = null;
-  let latest: Date | null = null;
-  for (const s of samples) {
-    if (!SLEEP_VALUES.has(s.value as number)) { continue; }
-    ms += s.endDate.getTime() - s.startDate.getTime();
-    if (!earliest || s.startDate.getTime() < earliest.getTime()) {
-      earliest = s.startDate;
-    }
-    if (!latest || s.endDate.getTime() > latest.getTime()) {
-      latest = s.endDate;
-    }
-  }
-  if (ms <= 0 || !earliest || !latest) { return null; }
-  return { hours: ms / 3_600_000, startDate: earliest, endDate: latest };
+  return pickMainSleepSession(
+    samples.map(s => ({
+      startDate: s.startDate,
+      endDate: s.endDate,
+      value: s.value as number,
+    })),
+    dayStart,
+  );
 }
 
 async function getStepCount(startDate: Date, endDate: Date): Promise<number | null> {
