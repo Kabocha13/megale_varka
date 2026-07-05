@@ -28,10 +28,12 @@ import {
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import {
+  cancelInternEveNotification,
   cancelInterviewEveNotification,
   cancelTaskNotification,
   getReminderDays,
   requestNotificationPermission,
+  scheduleInternEveNotification,
   scheduleInterviewEveNotification,
   scheduleTaskNotification,
 } from '../services/notifications';
@@ -68,6 +70,15 @@ interface InterviewRecord {
   note: string;    // 聞かれた質問・回答などの自由記述
 }
 
+interface InternRecord {
+  id: string;
+  title: string;   // 夏インターン・1dayなど（任意）
+  date: string;    // 開始日 YYYY-MM-DD（未設定は空文字）
+  endDate: string; // 終了日 YYYY-MM-DD（1日のみの場合は空文字）
+  time: string;    // 開始時刻 HH:mm（未設定は空文字）
+  note: string;    // 持ち物・内容・感想などの自由記述
+}
+
 type ESStatus = '下書き' | '提出済';
 
 interface ESQAItem {
@@ -96,6 +107,7 @@ interface Company {
   desireLevel: DesireLevel | '';
   tasks: Task[];
   interviews: InterviewRecord[];
+  interns: InternRecord[];
   globalFieldValues: Record<string, string>;
   memo: string;
   entrySheet: ESItem | null;
@@ -228,6 +240,7 @@ function makeEmptyCompany(): Company {
     desireLevel: '',
     tasks: [],
     interviews: [],
+    interns: [],
     globalFieldValues: {},
     memo: '',
     entrySheet: null,
@@ -256,6 +269,38 @@ function migrateInterviewSheetToRecords(data: unknown): InterviewRecord[] {
 
 function makeEmptyInterview(): InterviewRecord {
   return { id: makeUid(), stage: '一次面接', date: '', note: '' };
+}
+
+function makeEmptyIntern(): InternRecord {
+  return { id: makeUid(), title: '', date: '', endDate: '', time: '', note: '' };
+}
+
+function normalizeIntern(data: unknown): InternRecord {
+  const d = isPlainObject(data) ? data : {};
+  return {
+    id: typeof d.id === 'string' && d.id ? d.id : makeUid(),
+    title: typeof d.title === 'string' ? d.title : '',
+    date: typeof d.date === 'string' ? d.date : '',
+    endDate: typeof d.endDate === 'string' ? d.endDate : '',
+    time: typeof d.time === 'string' ? d.time : '',
+    note: typeof d.note === 'string' ? d.note : '',
+  };
+}
+
+// インターンの実質的な最終日（終了日が未設定なら開始日）
+function internLastDate(rec: InternRecord): string {
+  return rec.endDate && rec.endDate > rec.date ? rec.endDate : rec.date;
+}
+
+// 「7月1日 10:00 〜 7月3日」のような期間表示
+function displayInternPeriod(rec: InternRecord): string {
+  if (!rec.date) return '';
+  const start = `${displayDate(rec.date)}${rec.time ? ` ${rec.time}` : ''}`;
+  const end = rec.endDate;
+  if (end && end !== rec.date) {
+    return `${start} 〜 ${displayDate(end)}`;
+  }
+  return start;
 }
 
 function normalizeInterview(data: unknown): InterviewRecord {
@@ -1041,6 +1086,137 @@ const irS = StyleSheet.create({
   deleteBtnText: { color: C.danger, fontSize: 13 },
 });
 
+// ─── InternItem ───────────────────────────────────────────────────────────────
+
+interface InternItemProps {
+  intern: InternRecord;
+  onUpdate: (rec: InternRecord) => void;
+  onDelete: () => void;
+}
+
+function InternItem({ intern, onUpdate, onDelete }: InternItemProps) {
+  const [expanded, setExpanded] = useState(!intern.date && !intern.note);
+
+  return (
+    <View style={irS.card}>
+      <TouchableOpacity
+        style={irS.header}
+        onPress={() => setExpanded(e => !e)}
+        activeOpacity={0.7}
+      >
+        <View style={inS.badge}>
+          <Text style={irS.stageBadgeText}>{intern.title || 'インターン'}</Text>
+        </View>
+        <Text style={irS.notePreview} numberOfLines={1}>
+          {intern.note || '（メモ未入力）'}
+        </Text>
+        {intern.date ? (
+          <Text style={irS.date}>{displayInternPeriod(intern)}</Text>
+        ) : null}
+        <Text style={irS.chevron}>{expanded ? '▲' : '▼'}</Text>
+      </TouchableOpacity>
+
+      {expanded && (
+        <View style={irS.body}>
+          <Text style={irS.label}>名称（任意）</Text>
+          <TextInput
+            style={irS.input}
+            value={intern.title}
+            onChangeText={v => onUpdate({ ...intern, title: v })}
+            placeholder="例：夏季インターン・1day仕事体験"
+            placeholderTextColor={C.muted}
+          />
+
+          <Text style={irS.label}>開始日・開始時刻</Text>
+          <View style={inS.dateRow}>
+            <View style={inS.dateCol}>
+              <DatePickerField
+                value={intern.date}
+                onChange={v =>
+                  onUpdate({
+                    ...intern,
+                    date: v,
+                    // 終了日が開始日より前になったら開始日に合わせる
+                    endDate: intern.endDate && intern.endDate < v ? v : intern.endDate,
+                    time: intern.time || '10:00',
+                  })
+                }
+                allowPast
+              />
+            </View>
+            <View style={inS.timeCol}>
+              <TimePickerField
+                value={intern.time || '10:00'}
+                onChange={v => onUpdate({ ...intern, time: v })}
+              />
+            </View>
+          </View>
+
+          <View style={inS.endLabelRow}>
+            <Text style={irS.label}>終了日（複数日にわたる場合）</Text>
+            {!!intern.endDate && (
+              <TouchableOpacity
+                onPress={() => onUpdate({ ...intern, endDate: '' })}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={inS.endClearText}>クリア</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          <DatePickerField
+            value={intern.endDate}
+            onChange={v =>
+              // 開始日より前は選べない（開始日未設定ならそのまま採用）
+              onUpdate({ ...intern, endDate: intern.date && v < intern.date ? intern.date : v })
+            }
+            allowPast
+          />
+
+          {!!intern.date && intern.date >= formatDate(new Date()) && (
+            <Text style={inS.eveNote}>開始日前日の21:00にリマインダー通知が届きます</Text>
+          )}
+
+          <Text style={irS.label}>メモ（自由記述）</Text>
+          <TextInput
+            style={[irS.input, irS.inputNote]}
+            value={intern.note}
+            onChangeText={v => onUpdate({ ...intern, note: v })}
+            placeholder={'持ち物・集合場所・内容・感想などを自由に記録できます。\n例：私服OK。ワークの発表で〇〇を担当した。'}
+            placeholderTextColor={C.muted}
+            multiline
+            textAlignVertical="top"
+          />
+
+          <TouchableOpacity style={irS.deleteBtn} onPress={onDelete}>
+            <Text style={irS.deleteBtnText}>このインターン日程を削除</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+}
+
+const inS = StyleSheet.create({
+  badge: {
+    backgroundColor: '#43A047',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    marginRight: 10,
+    maxWidth: 130,
+  },
+  dateRow: { flexDirection: 'row', gap: 8 },
+  dateCol: { flex: 1.5 },
+  timeCol: { flex: 1 },
+  eveNote: { fontSize: 11, color: C.light, marginTop: 6 },
+  endLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+  },
+  endClearText: { fontSize: 12, color: C.danger },
+});
+
 // ─── SearchFilterModal ────────────────────────────────────────────────────────
 
 interface FilterState {
@@ -1262,6 +1438,7 @@ function CompanyViewScreen({ company, globalFields, onEdit, onBack, onToggleTask
   const doneTasks = company.tasks.filter(t => t.completed);
   const entrySheet = company.entrySheet ?? null;
   const interviews = company.interviews ?? [];
+  const interns = company.interns ?? [];
 
   return (
     <View style={vS.root}>
@@ -1405,6 +1582,30 @@ function CompanyViewScreen({ company, globalFields, onEdit, onBack, onToggleTask
                     ) : null}
                   </View>
                   <Text style={ivVS.note}>{rec.note || '（記録未入力）'}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
+        {/* インターン日程 */}
+        <View style={vS.section}>
+          <Text style={vS.sectionTitle}>インターン日程（{interns.length}件）</Text>
+          {interns.length === 0 ? (
+            <Text style={vS.emptyText}>インターンの日程はまだありません</Text>
+          ) : (
+            <View style={vS.card}>
+              {interns.map((rec, i) => (
+                <View key={rec.id} style={[ivVS.row, i === interns.length - 1 && vS.rowLast]}>
+                  <View style={ivVS.rowHeader}>
+                    <View style={[ivVS.stageBadge, ivVS.internBadge]}>
+                      <Text style={ivVS.stageBadgeText}>{rec.title || 'インターン'}</Text>
+                    </View>
+                    {rec.date ? (
+                      <Text style={ivVS.date}>{displayInternPeriod(rec)}</Text>
+                    ) : null}
+                  </View>
+                  <Text style={ivVS.note}>{rec.note || '（メモ未入力）'}</Text>
                 </View>
               ))}
             </View>
@@ -1724,9 +1925,32 @@ const ivVS = StyleSheet.create({
     paddingVertical: 2,
   },
   stageBadgeText: { color: '#FFF', fontSize: 12, fontWeight: 'bold' },
+  internBadge: { backgroundColor: '#43A047' },
   date: { fontSize: 12, color: C.light },
   note: { fontSize: 14, color: C.text, lineHeight: 21 },
 });
+
+// ─── UpcomingInternChip ───────────────────────────────────────────────────────
+
+function UpcomingInternChip({ interns }: { interns: InternRecord[] | undefined }) {
+  const today = formatDate(new Date());
+  // 開催中（複数日の途中）または今後のインターンを対象にする
+  const upcoming = (interns ?? [])
+    .filter(r => !!r.date && internLastDate(r) >= today)
+    .sort((a, b) => a.date.localeCompare(b.date))[0];
+  if (!upcoming) return null;
+  const ongoing = upcoming.date <= today;
+  return (
+    <View style={lS.internChip}>
+      <MaterialIcons name="business-center" size={13} color="#2E7D32" />
+      <Text style={lS.internChipText}>
+        {ongoing
+          ? `インターン開催中（〜${displayDate(internLastDate(upcoming))}）`
+          : `インターン ${displayInternPeriod(upcoming)}`}
+      </Text>
+    </View>
+  );
+}
 
 // ─── CompanyListScreen ────────────────────────────────────────────────────────
 
@@ -1857,6 +2081,7 @@ function CompanyListScreen({ companies, onSelect, onEdit, onAdd }: CompanyListSc
                   </Text>
                 </View>
               )}
+              <UpcomingInternChip interns={item.interns} />
               {pc > 0 && (
                 <View style={lS.taskAlert}>
                   <Text style={lS.taskAlertText}>未完了タスク {pc} 件</Text>
@@ -1983,6 +2208,18 @@ const lS = StyleSheet.create({
     gap: 4,
   },
   interviewChipText: { color: C.primary, fontSize: 12, fontWeight: 'bold' },
+  internChip: {
+    marginTop: 8,
+    backgroundColor: '#E8F5E9',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  internChipText: { color: '#2E7D32', fontSize: 12, fontWeight: 'bold' },
   empty: { alignItems: 'center', paddingTop: 72 },
   emptyTitle: { fontSize: 16, color: C.sub, marginBottom: 6 },
   emptySub: { fontSize: 13, color: C.muted },
@@ -2107,6 +2344,28 @@ function CompanyDetailScreen({ company, isNew, globalFields, listResetKey = 0, o
     Alert.alert('面接記録を削除', 'この面接の記録を削除しますか？', [
       { text: 'キャンセル', style: 'cancel' },
       { text: '削除', style: 'destructive', onPress: () => set('interviews', interviews.filter(x => x.id !== id)) },
+    ]);
+  };
+
+  const interns = form.interns ?? [];
+
+  const addIntern = () =>
+    set('interns', [...interns, makeEmptyIntern()]);
+
+  const updateIntern = (id: string, rec: InternRecord) =>
+    set('interns', interns.map(x => x.id === id ? rec : x));
+
+  const deleteIntern = (id: string) => {
+    Alert.alert('インターン日程を削除', 'このインターンの日程・メモを削除しますか？', [
+      { text: 'キャンセル', style: 'cancel' },
+      {
+        text: '削除',
+        style: 'destructive',
+        onPress: () => {
+          set('interns', interns.filter(x => x.id !== id));
+          cancelInternEveNotification(id).catch(() => {});
+        },
+      },
     ]);
   };
 
@@ -2290,6 +2549,27 @@ function CompanyDetailScreen({ company, isNew, globalFields, listResetKey = 0, o
           ))}
           <TouchableOpacity style={dS.addBtn} onPress={addInterview}>
             <Text style={dS.addBtnText}>＋ 面接記録を追加</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* ── インターン日程 ── */}
+        <Text style={dS.sectionTitle}>インターン日程</Text>
+        <View style={dS.section}>
+          {interns.length === 0 && (
+            <Text style={dS.emptySectionText}>
+              インターンの日程やメモ（持ち物・内容・感想など）を記録できます
+            </Text>
+          )}
+          {interns.map(rec => (
+            <InternItem
+              key={rec.id}
+              intern={rec}
+              onUpdate={updated => updateIntern(rec.id, updated)}
+              onDelete={() => deleteIntern(rec.id)}
+            />
+          ))}
+          <TouchableOpacity style={dS.addBtn} onPress={addIntern}>
+            <Text style={dS.addBtnText}>＋ インターン日程を追加</Text>
           </TouchableOpacity>
         </View>
 
@@ -2978,6 +3258,19 @@ function JobManagementScreen({ listResetKey = 0 }: JobManagementScreenProps) {
     } else {
       cancelInterviewEveNotification(company.id).catch(() => {});
     }
+    // インターン前夜リマインダー
+    (company.interns ?? []).forEach(intern => {
+      if (intern.date) {
+        scheduleInternEveNotification(
+          intern.id,
+          company.name,
+          intern.date,
+          intern.time ?? '',
+        ).catch(() => {});
+      } else {
+        cancelInternEveNotification(intern.id).catch(() => {});
+      }
+    });
   }, []);
 
   // 初期データ読み込み・通知権限リクエスト
@@ -3039,6 +3332,7 @@ function JobManagementScreen({ listResetKey = 0 }: JobManagementScreenProps) {
             interviews: Array.isArray(data.interviews) && data.interviews.length > 0
               ? data.interviews.map(normalizeInterview)
               : migrateInterviewSheetToRecords(data.interviewSheet),
+            interns: Array.isArray(data.interns) ? data.interns.map(normalizeIntern) : [],
             globalFieldValues: isPlainObject(data.globalFieldValues) ? toStringRecord(data.globalFieldValues) : {},
             memo: data.memo ?? '',
             entrySheet,
@@ -3083,7 +3377,7 @@ function JobManagementScreen({ listResetKey = 0 }: JobManagementScreenProps) {
   }, [uid, isDemo, syncNotifications]);
 
   // 企業を削除
-  const removeCompany = useCallback((companyId: string, tasks: Task[]) => {
+  const removeCompany = useCallback((companyId: string, tasks: Task[], interns: InternRecord[]) => {
     setCompanies(prev => {
       const next = prev.filter(c => c.id !== companyId);
       if (isDemo) {
@@ -3097,6 +3391,7 @@ function JobManagementScreen({ listResetKey = 0 }: JobManagementScreenProps) {
     deleteMyPagePassword(companyId).catch(() => {});
     tasks.forEach(t => cancelTaskNotification(t.id).catch(() => {}));
     cancelInterviewEveNotification(companyId).catch(() => {});
+    interns.forEach(i => cancelInternEveNotification(i.id).catch(() => {}));
   }, [uid, isDemo]);
 
   // 全社共通項目を保存
@@ -3192,7 +3487,7 @@ function JobManagementScreen({ listResetKey = 0 }: JobManagementScreenProps) {
         listResetKey={listResetKey}
         onUpdateGlobalFields={persistGlobalFields}
         onSave={saveCompany}
-        onDelete={() => removeCompany(view.companyId, company.tasks)}
+        onDelete={() => removeCompany(view.companyId, company.tasks, company.interns ?? [])}
         onNavigateToES={(updatedCompany) => {
           const draft = updatedCompany.entrySheet ?? makeEmptyES();
           setView({ mode: 'es', companyId: view.companyId, draft });

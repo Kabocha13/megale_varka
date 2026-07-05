@@ -11,7 +11,11 @@ import {
 } from 'firebase/auth';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Platform } from 'react-native';
-import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import {
+  GoogleSignin,
+  isErrorWithCode,
+  statusCodes,
+} from '@react-native-google-signin/google-signin';
 import { appleAuth } from '@invertase/react-native-apple-authentication';
 import { DEMO_MODE, GOOGLE_WEB_CLIENT_ID } from '@env';
 import { auth } from '../firebase/config';
@@ -105,6 +109,27 @@ function ensureGoogleConfigured(): void {
   googleConfigured = true;
 }
 
+// Googleログインのネイティブエラーを原因がわかる日本語メッセージに変換する
+function getGoogleSignInErrorMessage(error: unknown): string {
+  if (isErrorWithCode(error)) {
+    switch (error.code) {
+      case statusCodes.IN_PROGRESS:
+        return 'Googleログインの処理がすでに進行中です。しばらく待ってから再度お試しください。';
+      case statusCodes.PLAY_SERVICES_NOT_AVAILABLE:
+        return 'Google Play開発者サービスが利用できません。更新してから再度お試しください。';
+      case 'DEVELOPER_ERROR':
+        return (
+          'Googleログインの設定に問題があります（DEVELOPER_ERROR）。' +
+          'Firebase ConsoleにアプリのSHA-1フィンガープリントが登録されているか、' +
+          '.env の GOOGLE_WEB_CLIENT_ID が「ウェブクライアントID」になっているか確認してください。'
+        );
+      default:
+        return `Googleログインに失敗しました（${error.code}）。再度お試しください。`;
+    }
+  }
+  return 'Googleログインに失敗しました。再度お試しください。';
+}
+
 // ---- Provider ----
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -161,12 +186,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     ensureGoogleConfigured();
-    try {
-      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
-    } catch {
-      throw new Error('Google Play開発者サービスが利用できません。');
+    if (Platform.OS === 'android') {
+      try {
+        await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      } catch {
+        throw new Error('Google Play開発者サービスが利用できません。');
+      }
     }
-    const result = await GoogleSignin.signIn();
+    let result;
+    try {
+      result = await GoogleSignin.signIn();
+    } catch (error: unknown) {
+      throw new Error(getGoogleSignInErrorMessage(error));
+    }
     if (result.type !== 'success') {
       return; // ユーザーがキャンセルした場合は何もしない
     }
